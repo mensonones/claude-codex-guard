@@ -338,6 +338,21 @@ test('Dashboard HTML includes Claude and Codex badges and agent section', async 
   assert.ok(html.includes('Por agente'));
 });
 
+test('Dashboard HTML includes dark theme support, system preference fallback and theme switch', async () => {
+  const fs = await import('node:fs');
+  const path = await import('node:path');
+  const { fileURLToPath } = await import('node:url');
+  const __dirname = path.dirname(fileURLToPath(import.meta.url));
+  const html = fs.readFileSync(path.resolve(__dirname, '../src/dashboard.html'), 'utf-8');
+  assert.ok(html.includes('meta name="color-scheme" content="light dark"'));
+  assert.ok(html.includes('prefers-color-scheme: dark'));
+  assert.ok(html.includes(':root[data-theme="dark"]'));
+  assert.ok(html.includes('id="themeToggleBtn"'));
+  assert.ok(html.includes('id="themeAutoBtn"'));
+  assert.ok(html.includes('claude-codex-guard-theme'));
+  assert.ok(html.includes('initTheme();'));
+});
+
 test('Proxy registers a Codex Desktop session before its first request', async () => {
   const { server, db } = createProxyServer({ port: 0, dbPath: ':memory:' });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
