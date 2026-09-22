@@ -8,7 +8,7 @@ Versão atual: **1.1.0**.
 
 ---
 
-## 🚀 Como Funciona
+## Como Funciona
 
 O Claude Code trabalha em um *ReAct Loop*: para cada micro-ação (leitura de arquivo, execução de bash, grep), uma requisição é enviada para a Anthropic contendo todo o histórico acumulado.
 
@@ -28,7 +28,7 @@ O **Claude-Guard** atua em duas frentes complementares:
 
 ---
 
-## 📦 Como Usar
+## Como Usar
 
 ### Opção 1: Via Wrapper Direto (Recomendado)
 Basta substituir a chamada do comando `claude` por `claude-guard`:
@@ -49,7 +49,7 @@ npm link
 claude-guard
 ```
 
-### Opção 2: Integração Automática com o Claude Desktop 🖥️
+### Opção 2: Integração Automática com o Claude Desktop
 Se você usa o **Claude Desktop** (inclusive com sessões integradas de Claude Code):
 O instalador já integrou automaticamente o Claude-Guard ao inicializador do app:
 
@@ -88,7 +88,7 @@ O painel foi redesenhado como um cockpit claro e compacto, com navegação later
 
 O dashboard usa os dados disponíveis no SQLite e na sessão atual. Quando não há eventos, os cartões exibem estados vazios em vez de inventar métricas.
 
-### Relatórios de Economia & Histórico (SQLite) 📊
+### Relatórios de Economia & Histórico (SQLite)
 O Claude-Guard grava todas as métricas em um banco SQLite nativo (`~/.config/claude-guard/history.db`). Você pode consultar seus relatórios no terminal a qualquer momento:
 
 ```bash
@@ -123,7 +123,7 @@ claude
 
 ---
 
-## ⚙️ Variáveis de Ambiente & Customizações
+## Variáveis de Ambiente & Customizações
 
 Você pode ajustar os limites criando um arquivo `claude-guard.config.json` ou definindo variáveis de ambiente:
 
@@ -137,7 +137,7 @@ Você pode ajustar os limites criando um arquivo `claude-guard.config.json` ou d
 
 ---
 
-## 🧪 Testes
+## Testes
 
 Para executar a suíte de testes unitários e de integração:
 ```bash
@@ -146,10 +146,10 @@ npm test
 
 Os testes unitários cobrem o banco, o otimizador e a detecção de projetos. Os testes do servidor proxy precisam de permissão para abrir um listener HTTP local no ambiente de execução.
 
-## 🔐 Operação local
+## Operação local
 
 O proxy e o dashboard foram projetados para uso local. O histórico fica em `~/.config/claude-guard/history.db` e não deve ser exposto publicamente sem uma camada de autenticação e controle de origem. O dashboard não usa favicon baseado em emoji e os dados dinâmicos são escapados antes de serem renderizados.
 
-## 📄 Licença
+## Licença
 
 MIT.
