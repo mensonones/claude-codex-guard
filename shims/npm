@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# Claude-Guard npm shim: compresses noisy test/build progress outputs
+REAL_BIN=$(which -a npm 2>/dev/null | grep -F -v "/shims/" | head -n 1)
+REAL_BIN=${REAL_BIN:-/usr/bin/npm}
+
+SUBCOMMAND="$1"
+
+# If running test or run build/dev, filter progress and cap verbose output
+if [ "$SUBCOMMAND" = "test" ] || [ "$SUBCOMMAND" = "run" ]; then
+  TMP_OUT=$(mktemp)
+  # Disable progress animation which causes repetitive ANSI escape dumps
+  "$REAL_BIN" --no-progress "$@" > "$TMP_OUT" 2>&1
+  EXIT_CODE=$?
+  
+  LINES=$(wc -l < "$TMP_OUT" 2>/dev/null || echo 0)
+  if [ "$LINES" -gt 250 ]; then
+    head -n 50 "$TMP_OUT"
+    echo ""
+    echo "[... claude-guard npm shim: saída extensa de $LINES linhas enxugada. Exibindo final com erros/sumário ...]"
+    echo ""
+    tail -n 120 "$TMP_OUT"
+  else
+    cat "$TMP_OUT"
+  fi
+  
+  rm -f "$TMP_OUT"
+  exit $EXIT_CODE
+fi
+
+exec "$REAL_BIN" "$@"

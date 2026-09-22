@@ -1,0 +1,9 @@
+node_modules/
+coverage/
+dist/
+*.log
+*.db
+*.db-shm
+*.db-wal
+.DS_Store
+claude-guard.config.json

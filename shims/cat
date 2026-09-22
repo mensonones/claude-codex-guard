@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# Claude-Guard cat shim: prevents accidental massive file dumps to Claude context
+REAL_BIN=$(which -a cat 2>/dev/null | grep -F -v "/shims/" | head -n 1)
+REAL_BIN=${REAL_BIN:-/usr/bin/cat}
+
+MAX_LINES=200
+
+# If multiple arguments or flags, or reading from stdin, check if single existing file
+if [ "$#" -eq 1 ] && [ -f "$1" ]; then
+  TOTAL_LINES=$(wc -l < "$1" 2>/dev/null || echo 0)
+  if [ "$TOTAL_LINES" -gt "$MAX_LINES" ]; then
+    head -n 100 "$1"
+    START_TAIL=$((TOTAL_LINES - 50))
+    echo ""
+    echo "[... claude-guard cat shim: arquivo possui $TOTAL_LINES linhas. Exibindo linhas 1-100 e $START_TAIL-$TOTAL_LINES. Use 'sed -n X,Yp' ou 'head/tail' para ler fatias específicas ...]"
+    echo ""
+    tail -n 50 "$1"
+    exit 0
+  fi
+fi
+
+exec "$REAL_BIN" "$@"
