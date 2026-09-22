@@ -617,6 +617,35 @@ exec ${JSON.stringify(realBin)} --ozone-platform=x11 "$@"
 `;
 
   fs.writeFileSync(launcherPath, script, { mode: 0o755 });
+
+  // Update any embedded Claude Code wrappers in ~/.config/Claude/claude-code/*/claude
+  const claudeCodeDir = path.resolve(process.env.HOME || '.', '.config/Claude/claude-code');
+  if (fs.existsSync(claudeCodeDir)) {
+    try {
+      const versions = fs.readdirSync(claudeCodeDir);
+      for (const ver of versions) {
+        const verClaude = path.join(claudeCodeDir, ver, 'claude');
+        const verReal = path.join(claudeCodeDir, ver, 'claude.real');
+        if (fs.existsSync(verReal) && fs.existsSync(verClaude)) {
+          const wrapperContent = `#!/usr/bin/env bash
+export ANTHROPIC_BASE_URL="http://127.0.0.1:${config.port}"
+export PATH="${shimsDir}:$PATH"
+
+# Desativa telemetria, traces do OpenTelemetry e checagens excessivas de rede
+export CLAUDE_CODE_ENABLE_TELEMETRY="0"
+export OTEL_SDK_DISABLED="true"
+export DO_NOT_TRACK="1"
+export DISABLE_TELEMETRY="1"
+export DISABLE_AUTOUPDATER="1"
+
+exec "$(dirname "$0")/claude.real" "$@"
+`;
+          fs.writeFileSync(verClaude, wrapperContent, { mode: 0o755 });
+        }
+      }
+    } catch {}
+  }
+
   console.log(`\x1b[32m✔ Integração com o Claude Desktop concluída com sucesso!\x1b[0m`);
   console.log(`  Arquivo atualizado: ${launcherPath}`);
   console.log(`  Backup salvo em   : ${backupPath}`);
