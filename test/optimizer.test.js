@@ -35,7 +35,7 @@ test('TokenOptimizer truncates excessively large tool results', () => {
   assert.ok(res.savedTokens > 1000);
 
   const finalContent = res.payload.messages[2].content[0].content;
-  assert.ok(finalContent.includes('claude-guard:'));
+  assert.ok(finalContent.includes('claude-codex-guard:'));
   assert.ok(finalContent.length <= 650);
 });
 
@@ -88,5 +88,5 @@ test('TokenOptimizer triggers circuit breaker when loops exceed threshold', () =
 
   assert.equal(res.circuitBreakerActivated, true);
   const lastToolResult = res.payload.messages[messages.length - 1].content[0].content;
-  assert.ok(lastToolResult.includes('AVISO CRÍTICO - CLAUDE-GUARD CIRCUIT BREAKER'));
+  assert.ok(lastToolResult.includes('AVISO CRÍTICO - CLAUDE-CODEX-GUARD CIRCUIT BREAKER'));
 });

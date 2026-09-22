@@ -13,14 +13,14 @@ const lastNotificationAt = new Map();
  * Silently catches errors if running in headless or unsupported environments.
  */
 export function sendNotification({
-  title = 'Claude-Guard',
+  title = 'Claude-Codex-Guard',
   message = '',
   icon = 'security-high',
   urgency = 'normal',
-  appName = 'Claude-Guard'
+  appName = 'Claude-Codex-Guard'
 } = {}) {
   // Only attempt if not explicitly disabled and on linux / graphical display
-  if (process.env.CLAUDE_GUARD_NO_NOTIFY === '1') return;
+  if (process.env.CLAUDE_CODEX_GUARD_NO_NOTIFY === '1') return;
   if (process.platform !== 'linux' && !process.env.DISPLAY && !process.env.WAYLAND_DISPLAY) return;
 
   try {
@@ -28,7 +28,7 @@ export function sendNotification({
       '-a', appName,
       '-i', icon,
       '-u', urgency,
-      '-h', 'string:desktop-entry:claude-guard',
+      '-h', 'string:desktop-entry:claude-codex-guard',
       title,
       message
     ], {
@@ -47,7 +47,7 @@ export function sendNotification({
  */
 export function notifyProxyStarted(port, dashboardUrl) {
   sendNotification({
-    title: 'Claude-Guard Ativo 🛡️',
+    title: 'Claude-Codex-Guard Ativo 🛡️',
     message: `Proxy operando na porta ${port}\nDashboard: ${dashboardUrl}\nCompatível com Claude & Codex`,
     icon: 'security-high',
     urgency: 'normal'
@@ -63,7 +63,7 @@ export function notifyCircuitBreaker(projectName, loops) {
   if (now - (lastNotificationAt.get(key) || 0) < 30_000) return;
   lastNotificationAt.set(key, now);
   sendNotification({
-    title: 'Claude-Guard: Circuit Breaker ⚠️',
+    title: 'Claude-Codex-Guard: Circuit Breaker ⚠️',
     message: `Loop agêntico contido (${loops} passos de ferramentas seguidas) no projeto '${projectName}'.`,
     icon: 'dialog-warning',
     urgency: 'critical'
@@ -74,10 +74,10 @@ export function notifyCircuitBreaker(projectName, loops) {
  * Starts the Python-based StatusNotifierItem tray indicator if available.
  */
 export function startTrayIndicator(port, parentPid = process.pid) {
-  if (process.env.CLAUDE_GUARD_NO_TRAY === '1') return null;
+  if (process.env.CLAUDE_CODEX_GUARD_NO_TRAY === '1') return null;
   if (process.platform !== 'linux' && !process.env.DISPLAY && !process.env.WAYLAND_DISPLAY) return null;
 
-  const trayScript = path.resolve(projectRoot, 'scripts/claude-guard-tray.py');
+  const trayScript = path.resolve(projectRoot, 'scripts/claude-codex-guard-tray.py');
   if (!fs.existsSync(trayScript)) return null;
 
   try {

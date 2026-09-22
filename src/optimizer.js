@@ -40,7 +40,7 @@ export class TokenOptimizer {
     const tail = text.slice(-Math.max(0, half));
     const prunedCount = text.length - (head.length + tail.length);
 
-    const replacement = `${head}\n\n[... claude-guard: ${prunedCount} caracteres truncados para poupar tokens ...]\n\n${tail}`;
+    const replacement = `${head}\n\n[... claude-codex-guard: ${prunedCount} caracteres truncados para poupar tokens ...]\n\n${tail}`;
     return {
       text: replacement,
       truncated: true,
@@ -117,7 +117,7 @@ export class TokenOptimizer {
           const lines = msg.content.split('\n');
           const summary = lines.slice(0, 3).join('\n');
           const originalLength = msg.content.length;
-          msg.content = `${summary}\n[... claude-guard: ${originalLength} caracteres de saída anterior compactados ...]`;
+          msg.content = `${summary}\n[... claude-codex-guard: ${originalLength} caracteres de saída anterior compactados ...]`;
           this.stats.prunedToolResults++;
         } else {
           const res = this.truncateText(msg.content, this.config.maxToolResultChars);
@@ -133,7 +133,7 @@ export class TokenOptimizer {
               const lines = sub.text.split('\n');
               const summary = lines.slice(0, 3).join('\n');
               const originalLength = sub.text.length;
-              sub.text = `${summary}\n[... claude-guard: ${originalLength} caracteres de saída anterior compactados ...]`;
+              sub.text = `${summary}\n[... claude-codex-guard: ${originalLength} caracteres de saída anterior compactados ...]`;
               this.stats.prunedToolResults++;
             } else {
               const res = this.truncateText(sub.text, this.config.maxToolResultChars);
@@ -255,7 +255,7 @@ export class TokenOptimizer {
             const lines = block.content.split('\n');
             const summary = lines.slice(0, 3).join('\n');
             const originalLength = block.content.length;
-            block.content = `${summary}\n[... claude-guard: ${originalLength} caracteres de saída anterior compactados ...]`;
+            block.content = `${summary}\n[... claude-codex-guard: ${originalLength} caracteres de saída anterior compactados ...]`;
             this.stats.prunedToolResults++;
           } else {
             // Standard truncation for recent or shorter turns
@@ -272,7 +272,7 @@ export class TokenOptimizer {
                 const lines = sub.text.split('\n');
                 const summary = lines.slice(0, 3).join('\n');
                 const originalLength = sub.text.length;
-                sub.text = `${summary}\n[... claude-guard: ${originalLength} caracteres de saída anterior compactados ...]`;
+                sub.text = `${summary}\n[... claude-codex-guard: ${originalLength} caracteres de saída anterior compactados ...]`;
                 this.stats.prunedToolResults++;
               } else {
                 const res = this.truncateText(sub.text, this.config.maxToolResultChars);
@@ -287,7 +287,7 @@ export class TokenOptimizer {
 
         // If circuit breaker triggered and this is the latest tool result, inject warning
         if (circuitBreakerActivated && i === toolResultIndices[toolResultIndices.length - 1]) {
-          const warning = `\n\n[AVISO CRÍTICO - CLAUDE-GUARD CIRCUIT BREAKER]: Você já executou ${consecutiveToolTurns} ações de ferramentas consecutivas sem intervenção humana. PARE agora, resuma objetivamente o que já fez até aqui e peça confirmação ao usuário antes de continuar.`;
+          const warning = `\n\n[AVISO CRÍTICO - CLAUDE-CODEX-GUARD CIRCUIT BREAKER]: Você já executou ${consecutiveToolTurns} ações de ferramentas consecutivas sem intervenção humana. PARE agora, resuma objetivamente o que já fez até aqui e peça confirmação ao usuário antes de continuar.`;
           if (typeof block.content === 'string') {
             block.content += warning;
           } else if (Array.isArray(block.content) && block.content.length > 0) {

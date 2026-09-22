@@ -11,7 +11,7 @@ export class GuardDB {
     if (customPath === ':memory:') {
       this.dbPath = ':memory:';
     } else {
-      const configDir = path.resolve(process.env.HOME || '.', '.config/claude-guard');
+      const configDir = path.resolve(process.env.HOME || '.', '.config/claude-codex-guard');
       if (!fs.existsSync(configDir)) {
         fs.mkdirSync(configDir, { recursive: true });
       }
@@ -102,7 +102,7 @@ export class GuardDB {
         `).run(sessionUuid);
       }
     } catch (err) {
-      console.error('[claude-guard] Failed to log telemetry block:', err.message);
+      console.error('[claude-codex-guard] Failed to log telemetry block:', err.message);
     }
   }
 

@@ -6,6 +6,6 @@ dist/
 *.db-shm
 *.db-wal
 .DS_Store
-claude-guard.config.json
+claude-codex-guard.config.json
 .argus/
 scripts/__pycache__/

@@ -60,7 +60,7 @@ test('Proxy intercepts /v1/messages, optimizes body, and streams response', asyn
 
   assert.ok(receivedBody, 'Mock Anthropic should receive body');
   const receivedContent = receivedBody.messages[2].content[0].content;
-  assert.ok(receivedContent.includes('claude-guard:'));
+  assert.ok(receivedContent.includes('claude-codex-guard:'));
   assert.ok(receivedContent.length < 600);
   assert.ok(optimizer.stats.estimatedTokensSaved > 500);
 
@@ -90,14 +90,14 @@ test('Proxy intercepts and blocks telemetry requests without contacting upstream
     headers: { 'content-type': 'application/json' }
   }, res => {
     assert.equal(res.statusCode, 200);
-    assert.equal(res.headers['x-claude-guard-blocked'], 'true');
-    assert.equal(res.headers['x-claude-guard-upstream'], 'aborted-locally');
+    assert.equal(res.headers['x-claude-codex-guard-blocked'], 'true');
+    assert.equal(res.headers['x-claude-codex-guard-upstream'], 'aborted-locally');
     const chunks = [];
     res.on('data', c => chunks.push(c));
     res.on('end', () => {
       const data = JSON.parse(Buffer.concat(chunks).toString('utf-8'));
       assert.equal(data.status, 'ok');
-      assert.equal(data.blocked_by, 'claude-guard');
+      assert.equal(data.blocked_by, 'claude-codex-guard');
       assert.equal(data.upstream_forwarded, false);
       assert.equal(optimizer.stats.telemetryBlocked, 1);
     });
@@ -108,9 +108,9 @@ test('Proxy intercepts and blocks telemetry requests without contacting upstream
 
   await new Promise(resolve => setTimeout(resolve, 50));
 
-  // Check /claude-guard/telemetry endpoint
+  // Check /claude-codex-guard/telemetry endpoint
   const telemetryRes = await new Promise((resolve, reject) => {
-    http.get(`http://127.0.0.1:${proxyPort}/claude-guard/telemetry`, res => {
+    http.get(`http://127.0.0.1:${proxyPort}/claude-codex-guard/telemetry`, res => {
       let data = '';
       res.on('data', chunk => data += chunk);
       res.on('end', () => resolve({ status: res.statusCode, data: JSON.parse(data) }));
@@ -147,13 +147,13 @@ test('Proxy serves dashboard HTML on / and /dashboard', async () => {
 
     assert.equal(res.status, 200);
     assert.ok(res.headers['content-type'].includes('text/html'));
-    assert.ok(res.data.includes('Claude-Guard'));
+    assert.ok(res.data.includes('Claude-Codex-Guard'));
     assert.ok(res.data.includes('Dashboard'));
   }
 
-  // Also test /claude-guard/recent endpoint
+  // Also test /claude-codex-guard/recent endpoint
   const recentRes = await new Promise((resolve, reject) => {
-    http.get(`http://127.0.0.1:${proxyPort}/claude-guard/recent`, res => {
+    http.get(`http://127.0.0.1:${proxyPort}/claude-codex-guard/recent`, res => {
       let data = '';
       res.on('data', chunk => data += chunk);
       res.on('end', () => resolve({ status: res.statusCode, data: JSON.parse(data) }));

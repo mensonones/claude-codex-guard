@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const claudeGuardBin = path.resolve(__dirname, 'claude-guard.js');
+const claudeCodexGuardBin = path.resolve(__dirname, 'claude-codex-guard.js');
 
 const rawArgs = process.argv.slice(2);
 
@@ -40,7 +40,7 @@ if (rawArgs[0] === 'setup-desktop') {
   forwardedArgs = ['codex', ...rawArgs];
 }
 
-const child = spawn(process.execPath, [claudeGuardBin, ...forwardedArgs], {
+const child = spawn(process.execPath, [claudeCodexGuardBin, ...forwardedArgs], {
   stdio: 'inherit'
 });
 

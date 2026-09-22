@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Claude-Guard find shim: injects safe maxdepth and limits runaway file listing
+# Claude-Codex-Guard find shim: injects safe maxdepth and limits runaway file listing
 REAL_BIN=$(which -a find 2>/dev/null | grep -F -v "/shims/" | head -n 1)
 REAL_BIN=${REAL_BIN:-/usr/bin/find}
 
@@ -25,7 +25,7 @@ COUNT=$(wc -l < "$TMP_OUT" 2>/dev/null || echo 0)
 if [ "$COUNT" -gt 80 ]; then
   head -n 80 "$TMP_OUT"
   echo ""
-  echo "[... claude-guard find shim: busca retornou $COUNT itens. Exibidos primeiros 80. Especifique pastas ou padrões com '-name' ...]"
+  echo "[... claude-codex-guard find shim: busca retornou $COUNT itens. Exibidos primeiros 80. Especifique pastas ou padrões com '-name' ...]"
 else
   cat "$TMP_OUT"
 fi

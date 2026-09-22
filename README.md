@@ -1,4 +1,4 @@
-# Claude-Guard & Codex-Guard
+# Claude-Codex-Guard
 
 **Proxy local agnóstico de provedor para Claude e Codex, em CLI e nos fluxos desktop que aceitam endpoint configurável.**
 
@@ -12,7 +12,7 @@ Versão atual: **1.3.4**.
 
 Agentes de codificação autônomos trabalham em um *ReAct Loop*: para cada micro-ação (leitura de arquivo, execução de bash, diff), uma requisição é enviada contendo todo o histórico acumulado.
 
-O **Claude-Guard** atua em duas frentes complementares:
+O **Claude-Codex-Guard** atua em duas frentes complementares:
 
 1. **Proxy Reverso Inteligente Multi-Provedor (`src/proxy.js`)**:
    - **Compatível com Anthropic & OpenAI**: Roteamento dinâmico automático para `/v1/messages` (Claude) e `/v1/chat/completions`, `/v1/responses` ou `/backend-api/` (Codex / OpenAI).
@@ -32,18 +32,48 @@ O **Claude-Guard** atua em duas frentes complementares:
 
 ## Como Usar
 
+### Migração do nome anterior
+
+O projeto e o comando principal agora se chamam `claude-codex-guard`. O comando
+`codex-guard` continua sendo o atalho dedicado ao Codex.
+
+Para migrar uma instalação de `claude-guard`:
+
+1. Feche os clientes desktop e encerre o proxy e a bandeja antigos. Se usava
+   autostart, desative `claude-guard.service` e remova a entrada antiga
+   `~/.config/autostart/claude-guard.desktop` antes de habilitar o novo serviço.
+2. Com os processos parados, faça backup e copie o conteúdo de
+   `~/.config/claude-guard/` para `~/.config/claude-codex-guard/`, preservando
+   arquivos ocultos e links. Isso inclui `history.db` e `codex-home/`.
+   Se o destino já tiver dados, reconcilie-os antes de copiar; não sobrescreva
+   históricos ou configurações existentes.
+3. Renomeie `claude-guard.config.json` para `claude-codex-guard.config.json`
+   e atualize variáveis `CLAUDE_GUARD_*` para `CLAUDE_CODEX_GUARD_*` no seu ambiente.
+4. Remova o pacote global antigo com `npm uninstall -g claude-guard` e, na
+   pasta deste repositório, execute `node bin/claude-codex-guard.js install`.
+   A instalação atualiza o caminho de origem e recria as integrações desktop
+   detectadas. Para clientes não detectados, execute os comandos `setup-desktop`
+   ou `setup-codex-desktop` conforme necessário.
+5. Se usava autostart, execute `claude-codex-guard autostart enable`.
+   Confira a instalação com `claude-codex-guard status` e o histórico com
+   `claude-codex-guard report`.
+
+Integrações próprias devem usar `/claude-codex-guard/*`, headers
+`x-claude-codex-guard-*` e o provider `claude-codex-guard`.
+A migração dos dados locais não é automática.
+
 ### Instalação global e atualização automática
 
 A instalação identifica os clientes disponíveis no ambiente — Claude CLI/Code, Codex CLI, Claude Desktop e ChatGPT/Codex Desktop — e registra a origem da instalação:
 
 ```bash
-claude-guard install
+claude-codex-guard install
 ```
 
 Para atualizar manualmente a instalação global:
 
 ```bash
-claude-guard update
+claude-codex-guard update
 ```
 
 Quando uma nova versão for encontrada no caminho de origem registrado, o comando global atualiza a instalação automaticamente antes de executar a ação solicitada. Use `--no-desktop` para instalar sem reconfigurar launchers gráficos.
@@ -51,14 +81,14 @@ Quando uma nova versão for encontrada no caminho de origem registrado, o comand
 ### 1. Com o Claude Code CLI
 ```bash
 # Executar a partir da pasta do projeto:
-./bin/claude-guard.js
+./bin/claude-codex-guard.js
 
 # Ou após 'npm link' global:
-claude-guard
+claude-codex-guard
 ```
 
 ### 2. Com o OpenAI Codex CLI
-Você pode usar tanto o comando dedicado `codex-guard` quanto `claude-guard codex`:
+Você pode usar tanto o comando dedicado `codex-guard` quanto `claude-codex-guard codex`:
 ```bash
 # Executar com proteção e shims:
 ./bin/codex-guard.js
@@ -68,7 +98,7 @@ Você pode usar tanto o comando dedicado `codex-guard` quanto `claude-guard code
 ./bin/codex-guard.js -m gpt-5.6-luna
 
 # Ou via alias:
-claude-guard codex
+claude-codex-guard codex
 ```
 
 O wrapper do Codex injeta um provider local HTTP-only (`wire_api = "responses"`, `supports_websockets = false`) apontando para o proxy. Isso é necessário porque o Codex pode ignorar `OPENAI_BASE_URL` quando há um `model_providers.<nome>.base_url` configurado e usa WebSocket por padrão. As chamadas JSON HTTP chegam ao otimizador, ao SQLite e ao feed SSE da dashboard. O wrapper não usa `HTTPS_PROXY` nesse fluxo, pois isso criaria um túnel CONNECT criptografado impossível de inspecionar.
@@ -81,12 +111,12 @@ O launcher registra a sessão na abertura. A captura de tokens só é possível 
 
 #### Para Claude Desktop:
 ```bash
-claude-guard setup-desktop
+claude-codex-guard setup-desktop
 ```
 
 #### Para ChatGPT / Codex Desktop:
 ```bash
-claude-guard setup-codex-desktop
+claude-codex-guard setup-codex-desktop
 # (ou pelo alias: codex-guard setup-desktop)
 ```
 
@@ -97,16 +127,16 @@ A partir de agora:
 2. Clientes que aceitam endpoint configurável passam pelo filtro anti-desperdício; os shims são aplicados apenas ao processo lançado pelo wrapper.
 3. Você pode consultar em tempo real a economia de tokens com:
    ```bash
-   claude-guard status
+   claude-codex-guard status
    ```
 
 ### Dashboard Web em Tempo Real
-Monitore visualmente o trabalho do Claude-Guard diretamente pelo navegador enquanto utiliza o Claude Desktop ou Claude Code:
+Monitore visualmente o trabalho do Claude-Codex-Guard diretamente pelo navegador enquanto utiliza o Claude Desktop ou Claude Code:
 
 ```bash
 # Abre o painel em tempo real no seu navegador padrão:
-claude-guard dashboard
-# (ou pelo alias: claude-guard ui)
+claude-codex-guard dashboard
+# (ou pelo alias: claude-codex-guard ui)
 ```
 
 Ou acesse diretamente: **`http://localhost:48080/dashboard`**
@@ -124,24 +154,24 @@ O painel foi redesenhado como um cockpit claro e compacto, com navegação later
 O dashboard usa os dados disponíveis no SQLite e na sessão atual. Quando não há eventos, os cartões exibem estados vazios em vez de inventar métricas.
 
 ### Relatórios de Economia & Histórico (SQLite)
-O Claude-Guard grava todas as métricas em um banco SQLite nativo (`~/.config/claude-guard/history.db`). Você pode consultar seus relatórios no terminal a qualquer momento:
+O Claude-Codex-Guard grava todas as métricas em um banco SQLite nativo (`~/.config/claude-codex-guard/history.db`). Você pode consultar seus relatórios no terminal a qualquer momento:
 
 ```bash
 # Relatório completo consolidado + últimos dias
-claude-guard report
+claude-codex-guard report
 
 # Filtrar o relatório para um projeto específico (ex: justofood, argus)
-claude-guard report --project justofood
+claude-codex-guard report --project justofood
 
 # Apenas o consumo e economia de hoje
-claude-guard report --today
+claude-codex-guard report --today
 
 # Exportar dados para CSV ou JSON (ótimo para planilhas)
-claude-guard report --export csv > economia.csv
-claude-guard report --project argus --export csv > argus_economia.csv
+claude-codex-guard report --export csv > economia.csv
+claude-codex-guard report --project argus --export csv > argus_economia.csv
 
 # Limpar histórico do banco
-claude-guard report --clear
+claude-codex-guard report --clear
 ```
 
 ### Opção 3: Modo Proxy Standalone
@@ -149,7 +179,7 @@ Se preferir rodar o proxy em segundo plano manualmente:
 
 ```bash
 # 1. Inicia o proxy (emite notificação no desktop e sobe ícone na bandeja)
-claude-guard proxy
+claude-codex-guard proxy
 
 # 2. Em outro terminal, aponte a variável para o proxy:
 export ANTHROPIC_BASE_URL="http://127.0.0.1:48080"
@@ -157,27 +187,27 @@ claude
 ```
 
 ### 4. Notificações & Bandeja do Sistema (Linux)
-O Claude-Guard integra-se nativamente com ambientes Linux (GNOME Shell / Wayland, Ubuntu AppIndicators, KDE):
+O Claude-Codex-Guard integra-se nativamente com ambientes Linux (GNOME Shell / Wayland, Ubuntu AppIndicators, KDE):
 - **Notificação OSD (`notify-send`)**: emitida automaticamente ao iniciar o proxy e ao acionar o Circuit Breaker.
 - **Indicador na Bandeja (System Tray)**: exibe o escudo protetor no painel superior com menu de atalho:
   ```bash
   # Iniciar o indicador de bandeja individualmente:
-  claude-guard tray
+  claude-codex-guard tray
   ```
   O menu da bandeja permite abrir o Dashboard com 1 clique, inspecionar a economia de tokens acumulada e encerrar o serviço graciosamente.
 
 ### 5. Inicialização Automática com o Sistema (Autostart)
-Configure o Claude-Guard para iniciar automaticamente com o seu sistema operacional via `systemd --user` e XDG Autostart:
+Configure o Claude-Codex-Guard para iniciar automaticamente com o seu sistema operacional via `systemd --user` e XDG Autostart:
 
 ```bash
 # Ativar início automático com o sistema:
-claude-guard autostart enable
+claude-codex-guard autostart enable
 
 # Verificar status da inicialização automática:
-claude-guard autostart status
+claude-codex-guard autostart status
 
 # Desativar e remover serviços de inicialização:
-claude-guard autostart disable
+claude-codex-guard autostart disable
 ```
 *(Também disponível através de `codex-guard autostart [enable|disable|status]`)*
 
@@ -186,15 +216,15 @@ claude-guard autostart disable
 
 ## Variáveis de Ambiente & Customizações
 
-Você pode ajustar os limites criando um arquivo `claude-guard.config.json` ou definindo variáveis de ambiente:
+Você pode ajustar os limites criando um arquivo `claude-codex-guard.config.json` ou definindo variáveis de ambiente:
 
 | Variável | Padrão | Descrição |
 | :--- | :--- | :--- |
-| `CLAUDE_GUARD_PORT` | `48080` | Porta local do proxy |
-| `CLAUDE_GUARD_MAX_TOOL_CHARS` | `3500` | Limite de caracteres por saída de ferramenta (~900 tokens) |
-| `CLAUDE_GUARD_KEEP_TURNS` | `2` | Quantidade de turnos recentes de ferramentas preservados |
-| `CLAUDE_GUARD_MAX_LOOPS` | `12` | Limite do Circuit Breaker para chamadas de ferramentas seguidas |
-| `CLAUDE_GUARD_ENABLE_SHIMS` | `true` | Habilitar/desabilitar shims de terminal (`cat`, `git`, `find`, `npm`) |
+| `CLAUDE_CODEX_GUARD_PORT` | `48080` | Porta local do proxy |
+| `CLAUDE_CODEX_GUARD_MAX_TOOL_CHARS` | `3500` | Limite de caracteres por saída de ferramenta (~900 tokens) |
+| `CLAUDE_CODEX_GUARD_KEEP_TURNS` | `2` | Quantidade de turnos recentes de ferramentas preservados |
+| `CLAUDE_CODEX_GUARD_MAX_LOOPS` | `12` | Limite do Circuit Breaker para chamadas de ferramentas seguidas |
+| `CLAUDE_CODEX_GUARD_ENABLE_SHIMS` | `true` | Habilitar/desabilitar shims de terminal (`cat`, `git`, `find`, `npm`) |
 
 ---
 
@@ -209,7 +239,7 @@ Os testes unitários cobrem o banco, o otimizador e a detecção de projetos. Os
 
 ## Operação local
 
-O proxy e o dashboard foram projetados para uso local. O histórico fica em `~/.config/claude-guard/history.db` e não deve ser exposto publicamente sem uma camada de autenticação e controle de origem. O dashboard não usa favicon baseado em emoji e os dados dinâmicos são escapados antes de serem renderizados.
+O proxy e o dashboard foram projetados para uso local. O histórico fica em `~/.config/claude-codex-guard/history.db` e não deve ser exposto publicamente sem uma camada de autenticação e controle de origem. O dashboard não usa favicon baseado em emoji e os dados dinâmicos são escapados antes de serem renderizados.
 
 ## Licença
 

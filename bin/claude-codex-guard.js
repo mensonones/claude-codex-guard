@@ -15,7 +15,7 @@ const __dirname = path.dirname(__filename);
 const projectRoot = path.resolve(__dirname, '..');
 const shimsDir = path.resolve(projectRoot, 'shims');
 const packageJson = JSON.parse(fs.readFileSync(path.join(projectRoot, 'package.json'), 'utf8'));
-const installStatePath = path.resolve(process.env.HOME || '.', '.config/claude-guard/installation.json');
+const installStatePath = path.resolve(process.env.HOME || '.', '.config/claude-codex-guard/installation.json');
 
 const args = process.argv.slice(2);
 
@@ -61,9 +61,9 @@ function hasCodexConfigOverride(args, key) {
 }
 
 function codexGuardConfigArgs(baseUrl, args) {
-  const provider = process.env.CLAUDE_GUARD_CODEX_PROVIDER || 'claude-guard';
+  const provider = process.env.CLAUDE_CODEX_GUARD_CODEX_PROVIDER || 'claude-codex-guard';
   const providerBase = `${baseUrl}/backend-api/codex`;
-  const providerDefinition = `model_providers.${provider}={ name="Claude Guard", base_url="${providerBase}", wire_api="responses", requires_openai_auth=true, supports_websockets=false }`;
+  const providerDefinition = `model_providers.${provider}={ name="Claude Codex Guard", base_url="${providerBase}", wire_api="responses", requires_openai_auth=true, supports_websockets=false }`;
   const overrides = [];
 
   // OPENAI_BASE_URL is ignored when Codex has a selected custom provider. A
@@ -124,7 +124,7 @@ function printEnvironment(environment) {
 
 function installGlobal(sourcePath, environment) {
   const resolvedSource = path.resolve(sourcePath);
-  console.log(`\nAtualizando instalação global para Claude-Guard ${packageJson.version}...`);
+  console.log(`\nAtualizando instalação global para Claude-Codex-Guard ${packageJson.version}...`);
   const result = spawnSync('npm', ['install', '--global', '--no-fund', '--no-audit', resolvedSource], {
     stdio: 'inherit'
   });
@@ -134,7 +134,7 @@ function installGlobal(sourcePath, environment) {
   }
 
   writeInstallState(resolvedSource, environment);
-  console.log(`\x1b[32m✔ Claude-Guard ${packageJson.version} instalado globalmente.\x1b[0m`);
+  console.log(`\x1b[32m✔ Claude-Codex-Guard ${packageJson.version} instalado globalmente.\x1b[0m`);
   printEnvironment(environment);
   console.log(`  Estado salvo em: ${installStatePath}`);
 }
@@ -160,7 +160,7 @@ function handleInstallCommand() {
     }
   }
 
-  console.log('\nUse `claude-guard status` para confirmar o proxy e `claude-guard dashboard` para abrir a dashboard.');
+  console.log('\nUse `claude-codex-guard status` para confirmar o proxy e `claude-codex-guard dashboard` para abrir a dashboard.');
   process.exit(0);
 }
 
@@ -174,7 +174,7 @@ function handleUpdateCommand() {
 }
 
 function maybeAutoUpdateGlobalInstall() {
-  if (process.env.CLAUDE_GUARD_AUTO_UPDATE_GUARD === '1' || args[0] === 'install' || args[0] === 'update') return;
+  if (process.env.CLAUDE_CODEX_GUARD_AUTO_UPDATE_GUARD === '1' || args[0] === 'install' || args[0] === 'update') return;
   const state = readInstallState();
   if (!state?.sourcePath || path.resolve(state.sourcePath) === projectRoot || !fs.existsSync(path.join(state.sourcePath, 'package.json'))) return;
 
@@ -193,10 +193,10 @@ function maybeAutoUpdateGlobalInstall() {
     return;
   }
   writeInstallState(state.sourcePath, detectEnvironment());
-  const nextBin = path.join(state.sourcePath, 'bin/claude-guard.js');
+  const nextBin = path.join(state.sourcePath, 'bin/claude-codex-guard.js');
   const rerun = spawnSync(process.execPath, [nextBin, ...args], {
     stdio: 'inherit',
-    env: { ...process.env, CLAUDE_GUARD_AUTO_UPDATE_GUARD: '1' }
+    env: { ...process.env, CLAUDE_CODEX_GUARD_AUTO_UPDATE_GUARD: '1' }
   });
   process.exit(rerun.status ?? 0);
 }
@@ -211,7 +211,7 @@ function checkProxyAlive(host, port) {
     const req = http.request({
       hostname: host,
       port: port,
-      path: '/claude-guard/stats',
+      path: '/claude-codex-guard/stats',
       method: 'GET',
       timeout: 300
     }, res => {
@@ -224,34 +224,34 @@ function checkProxyAlive(host, port) {
 
 if (args.includes('--help') || args.includes('-h')) {
   console.log(`
-\x1b[1m\x1b[36mClaude-Guard\x1b[0m - Otimizador Ativo de Tokens, Loops e Relatórios para Claude Code & Desktop
+\x1b[1m\x1b[36mClaude-Codex-Guard\x1b[0m - Otimizador Ativo de Tokens, Loops e Relatórios para Claude Code & Desktop
 
 \x1b[1mUSO:\x1b[0m
-  claude-guard [opções do claude...]       (inicia o Claude Code CLI com proteção)
-  claude-guard codex [opções...]          (inicia o Codex CLI com proteção)
+  claude-codex-guard [opções do claude...]       (inicia o Claude Code CLI com proteção)
+  claude-codex-guard codex [opções...]          (inicia o Codex CLI com proteção)
   codex-guard [opções do codex...]        (inicia diretamente o Codex CLI com proteção)
-  claude-guard report                     (gera relatório histórico completo do SQLite)
-  claude-guard report --project <nome>    (filtra relatório por projeto específico)
-  claude-guard report --today             (relatório do dia atual)
-  claude-guard report --export [csv|json] (exporta dados do histórico)
-  claude-guard report --clear             (limpa histórico do banco)
-  claude-guard dashboard                  (abre o dashboard web em tempo real no navegador)
-  claude-guard status                     (exibe estatísticas em tempo real do proxy)
-  claude-guard proxy                      (inicia apenas o servidor proxy local)
-  claude-guard tray                       (inicia o indicador na bandeja do sistema - Linux)
-  claude-guard autostart [enable|disable] (ativa ou desativa o início automático com o sistema)
-  claude-guard install [--no-desktop]   (instala/atualiza globalmente e detecta clientes)
-  claude-guard update                   (força atualização da instalação global)
-  claude-guard setup-desktop              (integra automaticamente ao Claude Desktop)
-  claude-guard setup-codex-desktop        (integra automaticamente ao ChatGPT / Codex Desktop)
-  claude-guard --help                     (exibe esta ajuda)
+  claude-codex-guard report                     (gera relatório histórico completo do SQLite)
+  claude-codex-guard report --project <nome>    (filtra relatório por projeto específico)
+  claude-codex-guard report --today             (relatório do dia atual)
+  claude-codex-guard report --export [csv|json] (exporta dados do histórico)
+  claude-codex-guard report --clear             (limpa histórico do banco)
+  claude-codex-guard dashboard                  (abre o dashboard web em tempo real no navegador)
+  claude-codex-guard status                     (exibe estatísticas em tempo real do proxy)
+  claude-codex-guard proxy                      (inicia apenas o servidor proxy local)
+  claude-codex-guard tray                       (inicia o indicador na bandeja do sistema - Linux)
+  claude-codex-guard autostart [enable|disable] (ativa ou desativa o início automático com o sistema)
+  claude-codex-guard install [--no-desktop]   (instala/atualiza globalmente e detecta clientes)
+  claude-codex-guard update                   (força atualização da instalação global)
+  claude-codex-guard setup-desktop              (integra automaticamente ao Claude Desktop)
+  claude-codex-guard setup-codex-desktop        (integra automaticamente ao ChatGPT / Codex Desktop)
+  claude-codex-guard --help                     (exibe esta ajuda)
 
 \x1b[1mCOMO FUNCIONA:\x1b[0m
   1. Proxy HTTP local (porta 48080) interceptando chamadas Anthropic & OpenAI.
   2. Shims no PATH (cat, git, find, npm) impedem despejo de logs excessivos no contexto.
   3. Poda contextualmente 'tool_results' de rodadas antigas e trunca saídas gigantes.
   4. Circuit Breaker contra loops agênticos (mais de 12 tool calls seguidas).
-  5. Separação automática por projeto no banco SQLite (~/.config/claude-guard/history.db).
+  5. Separação automática por projeto no banco SQLite (~/.config/claude-codex-guard/history.db).
 `);
   process.exit(0);
 }
@@ -291,8 +291,8 @@ if (args[0] === 'report') {
 
   console.log('\n\x1b[36m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\x1b[0m');
   const title = filterProject
-    ? `  Claude-Guard 🛡️  - Relatório do Projeto: \x1b[1m${filterProject}\x1b[0m`
-    : `  Claude-Guard 🛡️  - Relatório Histórico de Economia (SQLite)`;
+    ? `  Claude-Codex-Guard 🛡️  - Relatório do Projeto: \x1b[1m${filterProject}\x1b[0m`
+    : `  Claude-Codex-Guard 🛡️  - Relatório Histórico de Economia (SQLite)`;
   console.log(`\x1b[1m\x1b[36m${title}\x1b[0m`);
   console.log('\x1b[36m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\x1b[0m');
   
@@ -386,7 +386,7 @@ else if (args[0] === 'status') {
   const req = http.request({
     hostname: config.host,
     port: config.port,
-    path: '/claude-guard/stats',
+    path: '/claude-codex-guard/stats',
     method: 'GET',
     timeout: 2000
   }, res => {
@@ -395,7 +395,7 @@ else if (args[0] === 'status') {
     res.on('end', () => {
       try {
         const json = JSON.parse(data);
-        console.log('\n\x1b[32m✔ Claude-Guard Proxy está ATIVO\x1b[0m em http://' + config.host + ':' + config.port);
+        console.log('\n\x1b[32m✔ Claude-Codex-Guard Proxy está ATIVO\x1b[0m em http://' + config.host + ':' + config.port);
         console.log('\x1b[36m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\x1b[0m');
         console.log('\x1b[1m\x1b[36m  Sessão Atual em Execução\x1b[0m');
         console.log('\x1b[36m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\x1b[0m');
@@ -435,13 +435,13 @@ else if (args[0] === 'status') {
   });
 
   req.on('error', () => {
-    console.log(`\x1b[33m● Claude-Guard Proxy está OFFLINE\x1b[0m (nenhum daemon em http://${config.host}:${config.port})`);
+    console.log(`\x1b[33m● Claude-Codex-Guard Proxy está OFFLINE\x1b[0m (nenhum daemon em http://${config.host}:${config.port})`);
     if (overall.totalRequests > 0) {
       console.log('\n\x1b[1m\x1b[36m  Acumulado Histórico Gravado (SQLite):\x1b[0m');
       console.log(`  Requisições registradas   : ${overall.totalRequests}`);
       console.log(`  Tokens poupados no total  : ~${overall.totalSavedTokens.toLocaleString()}`);
       console.log(`  Economia estimada total   : ${overall.estimatedUsdSaved} USD`);
-      console.log(`  Para ver relatório completo: \x1b[1mclaude-guard report\x1b[0m\n`);
+      console.log(`  Para ver relatório completo: \x1b[1mclaude-codex-guard report\x1b[0m\n`);
     }
     db.close();
     process.exit(0);
@@ -469,20 +469,20 @@ else if (args[0] === 'dashboard' || args[0] === 'ui') {
   const checkReq = http.request({
     hostname: config.host,
     port: config.port,
-    path: '/claude-guard/stats',
+    path: '/claude-codex-guard/stats',
     method: 'GET',
     timeout: 1000
   }, res => {
-    console.log(`\n\x1b[32m✔ Abrindo dashboard do Claude-Guard:\x1b[0m \x1b[1m\x1b[36m${dashboardUrl}\x1b[0m\n`);
+    console.log(`\n\x1b[32m✔ Abrindo dashboard do Claude-Codex-Guard:\x1b[0m \x1b[1m\x1b[36m${dashboardUrl}\x1b[0m\n`);
     openBrowser(dashboardUrl);
     process.exit(0);
   });
 
   checkReq.on('error', () => {
-    console.log(`\x1b[33m● Claude-Guard Proxy está OFFLINE.\x1b[0m`);
+    console.log(`\x1b[33m● Claude-Codex-Guard Proxy está OFFLINE.\x1b[0m`);
     console.log(`  Iniciando proxy em segundo plano na porta ${config.port}...`);
 
-    const logFile = path.resolve(process.env.HOME || '.', '.config/Claude/claude-guard.log');
+    const logFile = path.resolve(process.env.HOME || '.', '.config/Claude/claude-codex-guard.log');
     try {
       fs.mkdirSync(path.dirname(logFile), { recursive: true });
     } catch {}
@@ -491,7 +491,7 @@ else if (args[0] === 'dashboard' || args[0] === 'ui') {
     const err = fs.openSync(logFile, 'a');
 
     const nodeBin = process.execPath;
-    const guardBin = path.resolve(projectRoot, 'bin/claude-guard.js');
+    const guardBin = path.resolve(projectRoot, 'bin/claude-codex-guard.js');
 
     const child = spawn(nodeBin, [guardBin, 'proxy'], {
       detached: true,
@@ -529,7 +529,7 @@ else if (args[0] === 'setup-desktop') {
   }
 
   const script = `#!/usr/bin/env bash
-# Claude-Guard Desktop Launcher
+# Claude-Codex-Guard Desktop Launcher
 
 # Garante que o node esteja no PATH mesmo em inicialização gráfica (GNOME/KDE/desktop)
 if ! command -v node >/dev/null 2>&1; then
@@ -544,13 +544,13 @@ fi
 
 NODE_BIN=$(command -v node 2>/dev/null || echo "node")
 SHIMS_DIR="${shimsDir}"
-GUARD_BIN="${path.resolve(projectRoot, 'bin/claude-guard.js')}"
-LOG_FILE="$HOME/.config/Claude/claude-guard.log"
+GUARD_BIN="${path.resolve(projectRoot, 'bin/claude-codex-guard.js')}"
+LOG_FILE="$HOME/.config/Claude/claude-codex-guard.log"
 
 # Inicia o proxy local em segundo plano se nao estiver ativo
-if ! curl -s http://127.0.0.1:${config.port}/claude-guard/stats >/dev/null 2>&1; then
+if ! curl -s http://127.0.0.1:${config.port}/claude-codex-guard/stats >/dev/null 2>&1; then
   mkdir -p "$HOME/.config/Claude"
-  CLAUDE_GUARD_CLIENT=desktop nohup "$NODE_BIN" "$GUARD_BIN" proxy < /dev/null >> "$LOG_FILE" 2>&1 &
+  CLAUDE_CODEX_GUARD_CLIENT=desktop nohup "$NODE_BIN" "$GUARD_BIN" proxy < /dev/null >> "$LOG_FILE" 2>&1 &
   sleep 0.4
 fi
 
@@ -566,7 +566,7 @@ exec ${JSON.stringify(realBin)} --ozone-platform=x11 "$@"
   console.log(`  Backup salvo em   : ${backupPath}`);
   console.log(`\nAgora, sempre que você abrir o Claude Desktop:`);
   console.log(`  • O proxy e o SQLite gravarão os dados automaticamente.`);
-  console.log(`  • Relatórios por projeto disponíveis com: \x1b[1mclaude-guard report\x1b[0m\n`);
+  console.log(`  • Relatórios por projeto disponíveis com: \x1b[1mclaude-codex-guard report\x1b[0m\n`);
   process.exit(0);
 }
 
@@ -614,13 +614,13 @@ fi
 
 NODE_BIN=$(command -v node 2>/dev/null || echo "node")
 SHIMS_DIR="${shimsDir}"
-GUARD_BIN="${path.resolve(projectRoot, 'bin/claude-guard.js')}"
-LOG_FILE="$HOME/.config/claude-guard/codex-desktop.log"
+GUARD_BIN="${path.resolve(projectRoot, 'bin/claude-codex-guard.js')}"
+LOG_FILE="$HOME/.config/claude-codex-guard/codex-desktop.log"
 
 # Inicia o proxy local em segundo plano se nao estiver ativo
-if ! curl -s http://127.0.0.1:${config.port}/claude-guard/stats >/dev/null 2>&1; then
-  mkdir -p "$HOME/.config/claude-guard"
-  CLAUDE_GUARD_CLIENT=codex-desktop nohup "$NODE_BIN" "$GUARD_BIN" proxy < /dev/null >> "$LOG_FILE" 2>&1 &
+if ! curl -s http://127.0.0.1:${config.port}/claude-codex-guard/stats >/dev/null 2>&1; then
+  mkdir -p "$HOME/.config/claude-codex-guard"
+  CLAUDE_CODEX_GUARD_CLIENT=codex-desktop nohup "$NODE_BIN" "$GUARD_BIN" proxy < /dev/null >> "$LOG_FILE" 2>&1 &
   sleep 0.4
 fi
 
@@ -628,34 +628,34 @@ export PATH="$SHIMS_DIR:$PATH"
 export OPENAI_BASE_URL="http://127.0.0.1:${config.port}"
 export CODEX_API_BASE="$OPENAI_BASE_URL"
 unset HTTP_PROXY HTTPS_PROXY ALL_PROXY all_proxy
-export CLAUDE_GUARD_CLIENT="codex-desktop"
+export CLAUDE_CODEX_GUARD_CLIENT="codex-desktop"
 export DO_NOT_TRACK="1"
 export DISABLE_TELEMETRY="1"
 
 # O Codex embutido pode ignorar OPENAI_BASE_URL quando já existe um provider
 # selecionado. Use um CODEX_HOME isolado, preservando a autenticação existente,
 # para forçar o provider HTTP local sem alterar ~/.codex/config.toml.
-GUARD_CODEX_HOME="$HOME/.config/claude-guard/codex-home"
+GUARD_CODEX_HOME="$HOME/.config/claude-codex-guard/codex-home"
 mkdir -p "$GUARD_CODEX_HOME"
 if [ -f "$HOME/.codex/auth.json" ] && [ ! -e "$GUARD_CODEX_HOME/auth.json" ]; then
   ln -s "$HOME/.codex/auth.json" "$GUARD_CODEX_HOME/auth.json" 2>/dev/null || true
 fi
 cat > "$GUARD_CODEX_HOME/config.toml" <<EOF
-model_provider = "claude-guard"
+model_provider = "claude-codex-guard"
 
-[model_providers.claude-guard]
-name = "Claude Guard"
+[model_providers.claude-codex-guard]
+name = "Claude Codex Guard"
 base_url = "http://127.0.0.1:${config.port}/backend-api/codex"
 wire_api = "responses"
 requires_openai_auth = true
 supports_websockets = false
-http_headers = { "x-claude-guard-client" = "codex-desktop" }
+http_headers = { "x-claude-codex-guard-client" = "codex-desktop" }
 EOF
 export CODEX_HOME="$GUARD_CODEX_HOME"
 
 # Registra a sessão na dashboard mesmo antes do primeiro prompt.
-/usr/bin/curl -sS -X POST "http://127.0.0.1:${config.port}/claude-guard/register" \\
-  -H "x-claude-guard-client: codex-desktop" >/dev/null 2>&1 || true
+/usr/bin/curl -sS -X POST "http://127.0.0.1:${config.port}/claude-codex-guard/register" \\
+  -H "x-claude-codex-guard-client: codex-desktop" >/dev/null 2>&1 || true
 
 exec "${realBin}" "$@"
 `;
@@ -682,7 +682,7 @@ MimeType=x-scheme-handler/codex;x-scheme-handler/http;x-scheme-handler/https;tex
   console.log(`\nAgora, ao abrir o ChatGPT / Codex Desktop:`);
   console.log(`  • O proxy e o SQLite gravarão os dados automaticamente.`);
   console.log(`  • Os shims (cat, git, find, npm) conterão desperdícios de contexto.`);
-  console.log(`  • Relatórios disponíveis com: \x1b[1mclaude-guard report\x1b[0m\n`);
+  console.log(`  • Relatórios disponíveis com: \x1b[1mclaude-codex-guard report\x1b[0m\n`);
   process.exit(0);
 }
 
@@ -695,9 +695,9 @@ else if (args[0] === 'proxy') {
   let trayProc = null;
 
   server.listen(config.port, config.host, () => {
-    console.log(`\x1b[32m✔ Claude-Guard Proxy em execução em http://${config.host}:${config.port}\x1b[0m`);
+    console.log(`\x1b[32m✔ Claude-Codex-Guard Proxy em execução em http://${config.host}:${config.port}\x1b[0m`);
     console.log(`  Dashboard Web: \x1b[1m\x1b[36m${dashboardUrl}\x1b[0m`);
-    console.log(`  Banco SQLite : ~/.config/claude-guard/history.db`);
+    console.log(`  Banco SQLite : ~/.config/claude-codex-guard/history.db`);
     console.log(`  Configure no shell: export ANTHROPIC_BASE_URL="http://${config.host}:${config.port}"`);
 
     // Notificação visual no desktop Linux
@@ -711,16 +711,16 @@ else if (args[0] === 'proxy') {
 
   server.on('error', err => {
     if (err.code === 'EADDRINUSE') {
-      console.error(`\x1b[31m[claude-guard] Erro: A porta ${config.port} já está em uso!\x1b[0m`);
-      console.error(`Defina outra porta com CLAUDE_GUARD_PORT=${config.port + 1} claude-guard proxy ou encerre o processo anterior.`);
+      console.error(`\x1b[31m[claude-codex-guard] Erro: A porta ${config.port} já está em uso!\x1b[0m`);
+      console.error(`Defina outra porta com CLAUDE_CODEX_GUARD_PORT=${config.port + 1} claude-codex-guard proxy ou encerre o processo anterior.`);
     } else {
-      console.error(`\x1b[31m[claude-guard] Erro no servidor:\x1b[0m`, err);
+      console.error(`\x1b[31m[claude-codex-guard] Erro no servidor:\x1b[0m`, err);
     }
     process.exit(1);
   });
 
   const cleanup = () => {
-    console.log('\n\x1b[36m[claude-guard]\x1b[0m Encerrando proxy...');
+    console.log('\n\x1b[36m[claude-codex-guard]\x1b[0m Encerrando proxy...');
     if (trayProc) {
       try { trayProc.kill(); } catch {}
     }
@@ -739,7 +739,7 @@ else if (args[0] === 'proxy') {
 // ----------------------------------------------------
 else if (args[0] === 'tray') {
   const config = loadConfig();
-  const trayScript = path.resolve(projectRoot, 'scripts/claude-guard-tray.py');
+  const trayScript = path.resolve(projectRoot, 'scripts/claude-codex-guard-tray.py');
   if (!fs.existsSync(trayScript)) {
     console.error('\x1b[31mErro: Script do indicador de bandeja não encontrado.\x1b[0m');
     process.exit(1);
@@ -761,10 +761,10 @@ else if (args[0] === 'autostart') {
   const action = args[1] || 'status';
   const homeDir = process.env.HOME || '.';
   const systemdUserDir = path.resolve(homeDir, '.config/systemd/user');
-  const serviceFile = path.resolve(systemdUserDir, 'claude-guard.service');
+  const serviceFile = path.resolve(systemdUserDir, 'claude-codex-guard.service');
   const autostartDir = path.resolve(homeDir, '.config/autostart');
-  const desktopFile = path.resolve(autostartDir, 'claude-guard.desktop');
-  const guardBin = path.resolve(projectRoot, 'bin/claude-guard.js');
+  const desktopFile = path.resolve(autostartDir, 'claude-codex-guard.desktop');
+  const guardBin = path.resolve(projectRoot, 'bin/claude-codex-guard.js');
   const nodeBin = process.execPath;
   const config = loadConfig();
 
@@ -774,8 +774,8 @@ else if (args[0] === 'autostart') {
 
     const uid = typeof process.getuid === 'function' ? process.getuid() : 1000;
     const serviceContent = `[Unit]
-Description=Claude-Guard & Codex-Guard Local Proxy and Token Optimizer
-Documentation=https://github.com/mensonones/claude-guard
+Description=Claude-Codex-Guard Local Proxy and Token Optimizer
+Documentation=https://github.com/mensonones/claude-codex-guard
 After=network.target
 
 [Service]
@@ -785,7 +785,7 @@ Restart=always
 RestartSec=3s
 Environment=NODE_ENV=production
 Environment=PATH=${path.dirname(nodeBin)}:/usr/local/bin:/usr/bin:/bin
-Environment=CLAUDE_GUARD_PORT=${config.port}
+Environment=CLAUDE_CODEX_GUARD_PORT=${config.port}
 Environment=DISPLAY=${process.env.DISPLAY || ':0'}
 Environment=WAYLAND_DISPLAY=${process.env.WAYLAND_DISPLAY || 'wayland-0'}
 Environment=DBUS_SESSION_BUS_ADDRESS=${process.env.DBUS_SESSION_BUS_ADDRESS || ''}
@@ -799,7 +799,7 @@ WantedBy=default.target
     let systemdOk = false;
     try {
       execSync('systemctl --user daemon-reload', { stdio: 'ignore' });
-      execSync('systemctl --user enable --now claude-guard.service', { stdio: 'ignore' });
+      execSync('systemctl --user enable --now claude-codex-guard.service', { stdio: 'ignore' });
       systemdOk = true;
     } catch {}
 
@@ -808,7 +808,7 @@ WantedBy=default.target
     } else {
       const desktopContent = `[Desktop Entry]
 Type=Application
-Name=Claude-Guard
+Name=Claude-Codex-Guard
 Comment=Proxy Local e Otimizador de Tokens para Claude Code & Codex
 Exec=${nodeBin} ${guardBin} proxy
 Terminal=false
@@ -822,20 +822,20 @@ X-GNOME-Autostart-enabled=true
     console.log('\n\x1b[32m✔ Inicialização automática com o sistema configurada com sucesso!\x1b[0m');
     console.log(`  Porta padrão do serviço: \x1b[1m\x1b[36m${config.port}\x1b[0m`);
     if (systemdOk) {
-      console.log(`  Serviço systemd: \x1b[32mhabilitado e ativo\x1b[0m (~/.config/systemd/user/claude-guard.service)`);
+      console.log(`  Serviço systemd: \x1b[32mhabilitado e ativo\x1b[0m (~/.config/systemd/user/claude-codex-guard.service)`);
       console.log(`  Comandos úteis:`);
-      console.log(`    • Logs do serviço   : \x1b[1mjournalctl --user -u claude-guard -f\x1b[0m`);
-      console.log(`    • Status do serviço : \x1b[1msystemctl --user status claude-guard\x1b[0m`);
-      console.log(`    • Reiniciar serviço : \x1b[1msystemctl --user restart claude-guard\x1b[0m`);
+      console.log(`    • Logs do serviço   : \x1b[1mjournalctl --user -u claude-codex-guard -f\x1b[0m`);
+      console.log(`    • Status do serviço : \x1b[1msystemctl --user status claude-codex-guard\x1b[0m`);
+      console.log(`    • Reiniciar serviço : \x1b[1msystemctl --user restart claude-codex-guard\x1b[0m`);
     }
     console.log(systemdOk
       ? '  Autostart ativo pelo systemd; entrada XDG não foi mantida para evitar dois proxies.\n'
-      : '  Arquivo autostart: ~/.config/autostart/claude-guard.desktop\n');
+      : '  Arquivo autostart: ~/.config/autostart/claude-codex-guard.desktop\n');
     process.exit(0);
   } else if (action === 'disable' || action === '--disable') {
     try {
-      execSync('systemctl --user stop claude-guard.service', { stdio: 'ignore' });
-      execSync('systemctl --user disable claude-guard.service', { stdio: 'ignore' });
+      execSync('systemctl --user stop claude-codex-guard.service', { stdio: 'ignore' });
+      execSync('systemctl --user disable claude-codex-guard.service', { stdio: 'ignore' });
     } catch {}
 
     if (fs.existsSync(serviceFile)) {
@@ -852,27 +852,27 @@ X-GNOME-Autostart-enabled=true
     process.exit(0);
   } else {
     console.log('\n\x1b[36m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\x1b[0m');
-    console.log('  \x1b[1m\x1b[36mClaude-Guard - Status de Autostart no Sistema\x1b[0m');
+    console.log('  \x1b[1m\x1b[36mClaude-Codex-Guard - Status de Autostart no Sistema\x1b[0m');
     console.log('\x1b[36m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\x1b[0m');
     let systemdActive = 'inativo';
     let systemdEnabled = 'desabilitado';
     try {
-      const activeOut = execSync('systemctl --user is-active claude-guard.service 2>/dev/null', { encoding: 'utf-8' }).trim();
+      const activeOut = execSync('systemctl --user is-active claude-codex-guard.service 2>/dev/null', { encoding: 'utf-8' }).trim();
       systemdActive = activeOut === 'active' ? '\x1b[32mativo (running)\x1b[0m' : activeOut;
     } catch {}
     try {
-      const enabledOut = execSync('systemctl --user is-enabled claude-guard.service 2>/dev/null', { encoding: 'utf-8' }).trim();
+      const enabledOut = execSync('systemctl --user is-enabled claude-codex-guard.service 2>/dev/null', { encoding: 'utf-8' }).trim();
       systemdEnabled = enabledOut === 'enabled' ? '\x1b[32mhabilitado\x1b[0m' : enabledOut;
     } catch {}
 
     const hasDesktop = fs.existsSync(desktopFile);
 
     console.log(`  Serviço systemd : ${systemdEnabled} / ${systemdActive}`);
-    console.log(`  Arquivo Desktop : ${hasDesktop ? '\x1b[32mpresente\x1b[0m (~/.config/autostart/claude-guard.desktop)' : 'ausente'}`);
+    console.log(`  Arquivo Desktop : ${hasDesktop ? '\x1b[32mpresente\x1b[0m (~/.config/autostart/claude-codex-guard.desktop)' : 'ausente'}`);
     console.log(`  Porta padrão    : \x1b[1m${config.port}\x1b[0m`);
     console.log('\x1b[36m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\x1b[0m');
-    console.log(`  Para ativar  : \x1b[1mclaude-guard autostart enable\x1b[0m`);
-    console.log(`  Para remover : \x1b[1mclaude-guard autostart disable\x1b[0m\n`);
+    console.log(`  Para ativar  : \x1b[1mclaude-codex-guard autostart enable\x1b[0m`);
+    console.log(`  Para remover : \x1b[1mclaude-codex-guard autostart disable\x1b[0m\n`);
     process.exit(0);
   }
 }
@@ -911,9 +911,9 @@ else if (args[0] === 'codex') {
   delete env.HTTPS_PROXY;
   delete env.ALL_PROXY;
   delete env.all_proxy;
-  env.CLAUDE_GUARD_CLIENT = 'codex-cli';
-  env.CLAUDE_GUARD_PROJECT = projectName;
-  env.CLAUDE_GUARD_PROJECT_PATH = cwd;
+  env.CLAUDE_CODEX_GUARD_CLIENT = 'codex-cli';
+  env.CLAUDE_CODEX_GUARD_PROJECT = projectName;
+  env.CLAUDE_CODEX_GUARD_PROJECT_PATH = cwd;
   env.DO_NOT_TRACK = '1';
   env.DISABLE_TELEMETRY = '1';
   if (config.enableShims) {
@@ -940,13 +940,13 @@ else if (args[0] === 'codex') {
       console.log(`\x1b[1m\x1b[36m  Codex-Guard - Balanço da Sessão [${projectName}]\x1b[0m`);
       console.log('\x1b[36m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\x1b[0m');
       console.log(`  Economia Total no Projeto : \x1b[32m\x1b[1m${overall.estimatedUsdSaved} USD\x1b[0m (~${overall.totalSavedTokens.toLocaleString()} tokens)`);
-      console.log('  Consulte o histórico com: \x1b[1mclaude-guard report\x1b[0m\n');
+      console.log('  Consulte o histórico com: \x1b[1mclaude-codex-guard report\x1b[0m\n');
       db.close();
       process.exit(code ?? 0);
     });
 
     codexProc.on('error', err => {
-      console.error(`\x1b[31m[claude-guard] Erro ao iniciar 'codex':\x1b[0m ${err.message}`);
+      console.error(`\x1b[31m[claude-codex-guard] Erro ao iniciar 'codex':\x1b[0m ${err.message}`);
       process.exit(1);
     });
 
@@ -982,7 +982,7 @@ else if (args[0] === 'codex') {
         const overall = db.getOverallStats(projectName);
         console.log(`  Economia Total no Projeto : \x1b[32m\x1b[1m${overall.estimatedUsdSaved} USD\x1b[0m (~${overall.totalSavedTokens.toLocaleString()} tokens)`);
         console.log('\x1b[36m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\x1b[0m');
-        console.log('  Consulte o histórico com: \x1b[1mclaude-guard report\x1b[0m\n');
+        console.log('  Consulte o histórico com: \x1b[1mclaude-codex-guard report\x1b[0m\n');
         
         server.close(() => {
           db.close();
@@ -995,7 +995,7 @@ else if (args[0] === 'codex') {
       });
 
       codexProc.on('error', err => {
-        console.error(`\x1b[31m[claude-guard] Erro ao iniciar 'codex':\x1b[0m ${err.message}`);
+        console.error(`\x1b[31m[claude-codex-guard] Erro ao iniciar 'codex':\x1b[0m ${err.message}`);
         finish(1);
       });
 
@@ -1004,10 +1004,10 @@ else if (args[0] === 'codex') {
 
     server.on('error', err => {
       if (err.code === 'EADDRINUSE') {
-        console.error(`\x1b[31m[claude-guard] Erro: A porta ${config.port} já está em uso!\x1b[0m`);
-        console.error(`Defina outra porta com CLAUDE_GUARD_PORT=${config.port + 1} claude-guard codex ou encerre o processo anterior.`);
+        console.error(`\x1b[31m[claude-codex-guard] Erro: A porta ${config.port} já está em uso!\x1b[0m`);
+        console.error(`Defina outra porta com CLAUDE_CODEX_GUARD_PORT=${config.port + 1} claude-codex-guard codex ou encerre o processo anterior.`);
       } else {
-        console.error(`\x1b[31m[claude-guard] Erro no servidor:\x1b[0m`, err);
+        console.error(`\x1b[31m[claude-codex-guard] Erro no servidor:\x1b[0m`, err);
       }
       process.exit(1);
     });
@@ -1024,9 +1024,9 @@ else {
 
   const env = { ...process.env };
   env.ANTHROPIC_BASE_URL = `http://${config.host}:${config.port}`;
-  env.CLAUDE_GUARD_CLIENT = 'cli';
-  env.CLAUDE_GUARD_PROJECT = projectName;
-  env.CLAUDE_GUARD_PROJECT_PATH = cwd;
+  env.CLAUDE_CODEX_GUARD_CLIENT = 'cli';
+  env.CLAUDE_CODEX_GUARD_PROJECT = projectName;
+  env.CLAUDE_CODEX_GUARD_PROJECT_PATH = cwd;
   env.CLAUDE_CODE_ENABLE_TELEMETRY = '0';
   env.OTEL_SDK_DISABLED = 'true';
   env.DO_NOT_TRACK = '1';
@@ -1038,7 +1038,7 @@ else {
 
   const isAlreadyRunning = await checkProxyAlive(config.host, config.port);
   if (isAlreadyRunning) {
-    console.log(`\x1b[32m✔ Claude-Guard conectado ao Proxy ativo na porta ${config.port}\x1b[0m [Projeto: \x1b[1m${projectName}\x1b[0m]`);
+    console.log(`\x1b[32m✔ Claude-Codex-Guard conectado ao Proxy ativo na porta ${config.port}\x1b[0m [Projeto: \x1b[1m${projectName}\x1b[0m]`);
 
     const claudeProc = spawn('claude', args, {
       env,
@@ -1049,16 +1049,16 @@ else {
       const db = new GuardDB();
       const overall = db.getOverallStats(projectName);
       console.log('\n\x1b[36m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\x1b[0m');
-      console.log(`\x1b[1m\x1b[36m  Claude-Guard - Balanço da Sessão [${projectName}]\x1b[0m`);
+      console.log(`\x1b[1m\x1b[36m  Claude-Codex-Guard - Balanço da Sessão [${projectName}]\x1b[0m`);
       console.log('\x1b[36m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\x1b[0m');
       console.log(`  Economia Total no Projeto : \x1b[32m\x1b[1m${overall.estimatedUsdSaved} USD\x1b[0m (~${overall.totalSavedTokens.toLocaleString()} tokens)`);
-      console.log('  Consulte o histórico com: \x1b[1mclaude-guard report\x1b[0m\n');
+      console.log('  Consulte o histórico com: \x1b[1mclaude-codex-guard report\x1b[0m\n');
       db.close();
       process.exit(code ?? 0);
     });
 
     claudeProc.on('error', err => {
-      console.error(`\x1b[31m[claude-guard] Erro ao iniciar 'claude':\x1b[0m ${err.message}`);
+      console.error(`\x1b[31m[claude-codex-guard] Erro ao iniciar 'claude':\x1b[0m ${err.message}`);
       process.exit(1);
     });
 
@@ -1072,7 +1072,7 @@ else {
     });
 
     server.listen(config.port, config.host, () => {
-      console.log(`\x1b[32m✔ Claude-Guard ativado na porta ${config.port}\x1b[0m [Projeto: \x1b[1m${projectName}\x1b[0m]`);
+      console.log(`\x1b[32m✔ Claude-Codex-Guard ativado na porta ${config.port}\x1b[0m [Projeto: \x1b[1m${projectName}\x1b[0m]`);
       notifyProxyStarted(config.port, `http://${config.host}:${config.port}/dashboard`);
 
       const claudeProc = spawn('claude', args, {
@@ -1082,7 +1082,7 @@ else {
 
       const finish = (code = 0) => {
         console.log('\n\x1b[36m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\x1b[0m');
-        console.log(`\x1b[1m\x1b[36m  Claude-Guard - Balanço da Sessão [${projectName}]\x1b[0m`);
+        console.log(`\x1b[1m\x1b[36m  Claude-Codex-Guard - Balanço da Sessão [${projectName}]\x1b[0m`);
         console.log('\x1b[36m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\x1b[0m');
         const summary = optimizer.getSummary();
         console.log(`  Requisições interceptadas : \x1b[1m${summary.totalRequests}\x1b[0m`);
@@ -1094,7 +1094,7 @@ else {
         const overall = db.getOverallStats(projectName);
         console.log(`  Economia Total no Projeto : \x1b[32m\x1b[1m${overall.estimatedUsdSaved} USD\x1b[0m (~${overall.totalSavedTokens.toLocaleString()} tokens)`);
         console.log('\x1b[36m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\x1b[0m');
-        console.log('  Consulte o histórico com: \x1b[1mclaude-guard report\x1b[0m\n');
+        console.log('  Consulte o histórico com: \x1b[1mclaude-codex-guard report\x1b[0m\n');
         
         server.close(() => {
           db.close();
@@ -1107,7 +1107,7 @@ else {
       });
 
       claudeProc.on('error', err => {
-        console.error(`\x1b[31m[claude-guard] Erro ao iniciar 'claude':\x1b[0m ${err.message}`);
+        console.error(`\x1b[31m[claude-codex-guard] Erro ao iniciar 'claude':\x1b[0m ${err.message}`);
         finish(1);
       });
 
@@ -1116,10 +1116,10 @@ else {
 
     server.on('error', err => {
       if (err.code === 'EADDRINUSE') {
-        console.error(`\x1b[31m[claude-guard] Erro: A porta ${config.port} já está em uso!\x1b[0m`);
-        console.error(`Defina outra porta com CLAUDE_GUARD_PORT=${config.port + 1} claude-guard ou encerre o processo anterior.`);
+        console.error(`\x1b[31m[claude-codex-guard] Erro: A porta ${config.port} já está em uso!\x1b[0m`);
+        console.error(`Defina outra porta com CLAUDE_CODEX_GUARD_PORT=${config.port + 1} claude-codex-guard ou encerre o processo anterior.`);
       } else {
-        console.error(`\x1b[31m[claude-guard] Erro no servidor:\x1b[0m`, err);
+        console.error(`\x1b[31m[claude-codex-guard] Erro no servidor:\x1b[0m`, err);
       }
       process.exit(1);
     });

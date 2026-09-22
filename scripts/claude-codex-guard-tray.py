@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Claude-Guard Linux System Tray Indicator (StatusNotifierItem)
+Claude-Codex-Guard Linux System Tray Indicator (StatusNotifierItem)
 Integrates natively with GNOME Shell (Ubuntu AppIndicators), KDE, and XFCE.
 """
 
@@ -17,11 +17,11 @@ try:
     from dbus.mainloop.glib import DBusGMainLoop
     from gi.repository import GLib
 except ImportError as err:
-    print(f"[claude-guard-tray] Dependências ausentes: {err}", file=sys.stderr)
+    print(f"[claude-codex-guard-tray] Dependências ausentes: {err}", file=sys.stderr)
     sys.exit(1)
 
 def get_db_stats():
-    db_path = os.path.expanduser("~/.config/claude-guard/history.db")
+    db_path = os.path.expanduser("~/.config/claude-codex-guard/history.db")
     if not os.path.exists(db_path):
         return 0, 0.0
     try:
@@ -65,7 +65,7 @@ class DBusMenu(dbus.service.Object):
         item2 = self._make_item(2, {'label': '🛡️ Status: Ativo (Claude & Codex)', 'enabled': False})
         item3 = self._make_item(3, {'label': f'⚡ Economia: ~{tokens_str} tokens ({cost_str})', 'enabled': False})
         item4 = self._make_item(4, {'type': 'separator'})
-        item5 = self._make_item(5, {'label': '❌ Encerrar Claude-Guard', 'enabled': True})
+        item5 = self._make_item(5, {'label': '❌ Encerrar Claude-Codex-Guard', 'enabled': True})
 
         children = dbus.Array([item1, item2, item3, item4, item5], signature='v')
         root_props = dbus.Dictionary({'children-display': dbus.String('submenu')}, signature='sv')
@@ -107,8 +107,8 @@ class StatusNotifierItem(dbus.service.Object):
 
         self.props = {
             'Category': dbus.String('ApplicationStatus'),
-            'Id': dbus.String('claude-guard'),
-            'Title': dbus.String('Claude-Guard'),
+            'Id': dbus.String('claude-codex-guard'),
+            'Title': dbus.String('Claude-Codex-Guard'),
             'Status': dbus.String('Active'),
             'WindowId': dbus.Int32(0),
             'IconName': dbus.String('security-high'),
@@ -121,7 +121,7 @@ class StatusNotifierItem(dbus.service.Object):
                 (
                     dbus.String('security-high'),
                     dbus.Array([], signature='(iiay)'),
-                    dbus.String(f'Claude-Guard 🛡️ (Porta {port})'),
+                    dbus.String(f'Claude-Codex-Guard 🛡️ (Porta {port})'),
                     dbus.String('Otimizador de Tokens e Firewall Local para Claude & Codex')
                 ),
                 signature='sa(iiay)ss'
@@ -149,8 +149,8 @@ class StatusNotifierItem(dbus.service.Object):
         pass
 
 def main():
-    parser = argparse.ArgumentParser(description="Claude-Guard System Tray Indicator")
-    parser.add_argument('--port', type=int, default=int(os.environ.get('CLAUDE_GUARD_PORT', '48080')), help='Porta do proxy')
+    parser = argparse.ArgumentParser(description="Claude-Codex-Guard System Tray Indicator")
+    parser.add_argument('--port', type=int, default=int(os.environ.get('CLAUDE_CODEX_GUARD_PORT', '48080')), help='Porta do proxy')
     parser.add_argument('--parent-pid', type=int, default=None, help='PID do processo pai a encerrar junto')
     args = parser.parse_args()
 
@@ -158,13 +158,13 @@ def main():
     try:
         bus = dbus.SessionBus()
     except Exception as e:
-        print(f"[claude-guard-tray] Falha ao conectar ao D-Bus de sessão: {e}", file=sys.stderr)
+        print(f"[claude-codex-guard-tray] Falha ao conectar ao D-Bus de sessão: {e}", file=sys.stderr)
         sys.exit(1)
 
     loop = GLib.MainLoop()
 
     def on_quit():
-        print("[claude-guard-tray] Encerrando indicador da bandeja...")
+        print("[claude-codex-guard-tray] Encerrando indicador da bandeja...")
         if args.parent_pid:
             try:
                 os.kill(args.parent_pid, signal.SIGTERM)
@@ -173,7 +173,7 @@ def main():
         loop.quit()
 
     pid = os.getpid()
-    service_name = f'org.kde.StatusNotifierItem-claude-guard-{pid}'
+    service_name = f'org.kde.StatusNotifierItem-claude-codex-guard-{pid}'
 
     try:
         bus_name = dbus.service.BusName(service_name, bus)
@@ -182,9 +182,9 @@ def main():
 
         watcher = bus.get_object('org.kde.StatusNotifierWatcher', '/StatusNotifierWatcher')
         watcher.RegisterStatusNotifierItem(service_name, dbus_interface='org.kde.StatusNotifierWatcher')
-        print(f"[claude-guard-tray] Indicador registrado com sucesso na porta {args.port}!")
+        print(f"[claude-codex-guard-tray] Indicador registrado com sucesso na porta {args.port}!")
     except Exception as e:
-        print(f"[claude-guard-tray] Aviso: Não foi possível registrar o StatusNotifierItem: {e}", file=sys.stderr)
+        print(f"[claude-codex-guard-tray] Aviso: Não foi possível registrar o StatusNotifierItem: {e}", file=sys.stderr)
         sys.exit(1)
 
     def handle_signal(sig, frame):

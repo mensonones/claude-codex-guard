@@ -19,7 +19,7 @@ const DASHBOARD_HTML_PATH = path.join(__dirname, 'dashboard.html');
  * This matters when Claude and Codex share one long-lived proxy daemon.
  */
 export function detectClientType(url = '/', headers = {}, fallback = 'desktop') {
-  const explicit = headers['x-claude-guard-client'] || headers['x-codex-client'] || headers['x-client-type'];
+  const explicit = headers['x-claude-codex-guard-client'] || headers['x-codex-client'] || headers['x-client-type'];
   if (explicit) return String(explicit).toLowerCase();
 
   const normalizedUrl = String(url).toLowerCase();
@@ -39,9 +39,9 @@ export function createProxyServer(userConfig = {}) {
   const config = { ...loadConfig(), ...userConfig };
   const optimizer = new TokenOptimizer(config);
   const db = new GuardDB(userConfig.dbPath || null);
-  const clientType = userConfig.clientType || process.env.CLAUDE_GUARD_CLIENT || 'desktop';
-  let currentProject = userConfig.projectName || process.env.CLAUDE_GUARD_PROJECT || 'Geral';
-  let currentProjectPath = userConfig.projectPath || process.env.CLAUDE_GUARD_PROJECT_PATH || null;
+  const clientType = userConfig.clientType || process.env.CLAUDE_CODEX_GUARD_CLIENT || 'desktop';
+  let currentProject = userConfig.projectName || process.env.CLAUDE_CODEX_GUARD_PROJECT || 'Geral';
+  let currentProjectPath = userConfig.projectPath || process.env.CLAUDE_CODEX_GUARD_PROJECT_PATH || null;
   const sseClients = new Set();
 
   function broadcastEvent(eventType, payload) {
@@ -85,18 +85,18 @@ export function createProxyServer(userConfig = {}) {
     const requestSessionUuid = getSessionUuid(requestClientType, req.headers);
     let { projectName: currentProject, projectPath: currentProjectPath } =
       sessionProjects.get(requestSessionUuid) || {
-        projectName: userConfig.projectName || process.env.CLAUDE_GUARD_PROJECT || 'Geral',
-        projectPath: userConfig.projectPath || process.env.CLAUDE_GUARD_PROJECT_PATH || null
+        projectName: userConfig.projectName || process.env.CLAUDE_CODEX_GUARD_PROJECT || 'Geral',
+        projectPath: userConfig.projectPath || process.env.CLAUDE_CODEX_GUARD_PROJECT_PATH || null
       };
 
     const pathname = url.split('?')[0];
 
     // Register desktop clients as soon as their launcher opens, before the first LLM request.
-    if (method === 'POST' && pathname === '/claude-guard/register') {
-      const registeredClientType = req.headers['x-claude-guard-client'] ||
+    if (method === 'POST' && pathname === '/claude-codex-guard/register') {
+      const registeredClientType = req.headers['x-claude-codex-guard-client'] ||
         req.headers['x-codex-client'] || 'desktop';
-      const registeredProject = req.headers['x-claude-guard-project'] || currentProject;
-      const registeredProjectPath = req.headers['x-claude-guard-project-path'] || currentProjectPath;
+      const registeredProject = req.headers['x-claude-codex-guard-project'] || currentProject;
+      const registeredProjectPath = req.headers['x-claude-codex-guard-project-path'] || currentProjectPath;
       const registeredSessionUuid = db.createSession(registeredClientType, registeredProject, registeredProjectPath);
       sessionUuids.set(registeredClientType, registeredSessionUuid);
       sessionProjects.set(registeredSessionUuid, { projectName: registeredProject, projectPath: registeredProjectPath });
@@ -126,7 +126,7 @@ export function createProxyServer(userConfig = {}) {
     }
 
     // Recent requests endpoint for dashboard hydration
-    if (method === 'GET' && url === '/claude-guard/recent') {
+    if (method === 'GET' && url === '/claude-codex-guard/recent') {
       res.writeHead(200, {
         'Content-Type': 'application/json'
       });
@@ -140,7 +140,7 @@ export function createProxyServer(userConfig = {}) {
     }
 
     // Server-Sent Events (SSE) stream for real-time live events
-    if (method === 'GET' && url === '/claude-guard/events') {
+    if (method === 'GET' && url === '/claude-codex-guard/events') {
       res.writeHead(200, {
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache',
@@ -156,7 +156,7 @@ export function createProxyServer(userConfig = {}) {
     }
 
     // Telemetry details endpoint (stats + recent logs)
-    if (method === 'GET' && url === '/claude-guard/telemetry') {
+    if (method === 'GET' && url === '/claude-codex-guard/telemetry') {
       res.writeHead(200, {
         'Content-Type': 'application/json'
       });
@@ -172,7 +172,7 @@ export function createProxyServer(userConfig = {}) {
     }
 
     // Local health, live session and SQLite persistent stats endpoint
-    if (url === '/claude-guard/stats' || url === '/_guard/stats') {
+    if (url === '/claude-codex-guard/stats' || url === '/_guard/stats') {
       res.writeHead(200, { 'content-type': 'application/json' });
       res.end(JSON.stringify({
         status: 'online',
@@ -214,7 +214,7 @@ export function createProxyServer(userConfig = {}) {
           statusCode: 200
         });
 
-        console.log(`\x1b[35m[claude-guard]\x1b[0m 🛡️ Telemetria bloqueada: \x1b[1m${method} ${url}\x1b[0m (0B enviados para Anthropic / ${payloadBytes}B descartados localmente)`);
+        console.log(`\x1b[35m[claude-codex-guard]\x1b[0m 🛡️ Telemetria bloqueada: \x1b[1m${method} ${url}\x1b[0m (0B enviados para Anthropic / ${payloadBytes}B descartados localmente)`);
 
         broadcastEvent('telemetry', {
           type: 'telemetry',
@@ -228,16 +228,16 @@ export function createProxyServer(userConfig = {}) {
 
         res.writeHead(200, {
           'content-type': 'application/json',
-          'x-claude-guard-blocked': 'true',
-          'x-claude-guard-upstream': 'aborted-locally'
+          'x-claude-codex-guard-blocked': 'true',
+          'x-claude-codex-guard-upstream': 'aborted-locally'
         });
         res.end(JSON.stringify({
           status: 'ok',
-          blocked_by: 'claude-guard',
+          blocked_by: 'claude-codex-guard',
           upstream_forwarded: false,
           endpoint: url,
           bytes_prevented: payloadBytes,
-          message: 'Telemetry discarded locally by Claude-Guard proxy (0 bytes sent upstream)'
+          message: 'Telemetry discarded locally by Claude-Codex-Guard proxy (0 bytes sent upstream)'
         }));
       });
       return;
@@ -284,7 +284,7 @@ export function createProxyServer(userConfig = {}) {
       : targetHost;
     delete forwardedHeaders['x-target-host'];
     // These are local routing hints and must never be sent to a provider.
-    delete forwardedHeaders['x-claude-guard-client'];
+    delete forwardedHeaders['x-claude-codex-guard-client'];
     delete forwardedHeaders['x-codex-client'];
     delete forwardedHeaders['x-client-type'];
 
@@ -330,17 +330,17 @@ export function createProxyServer(userConfig = {}) {
             const totalSaved = result.stats.estimatedTokensSaved;
             
             console.log(
-              `\x1b[36m[claude-guard]\x1b[0m ⚡ [\x1b[1m${currentProject}\x1b[0m] Req #${result.stats.totalRequests}: Poupatron economizou \x1b[32m~${savedTokens.toLocaleString()} tokens\x1b[0m | Sessão: \x1b[32m~${totalSaved.toLocaleString()} tokens\x1b[0m`
+              `\x1b[36m[claude-codex-guard]\x1b[0m ⚡ [\x1b[1m${currentProject}\x1b[0m] Req #${result.stats.totalRequests}: Poupatron economizou \x1b[32m~${savedTokens.toLocaleString()} tokens\x1b[0m | Sessão: \x1b[32m~${totalSaved.toLocaleString()} tokens\x1b[0m`
             );
 
             if (result.circuitBreakerActivated) {
               console.log(
-                `\x1b[33m[claude-guard]\x1b[0m ⚠️  \x1b[1mCIRCUIT BREAKER ATIVADO:\x1b[0m Limite de loops atingido (${config.maxConsecutiveToolCalls}). Agente foi instruído a parar e reportar.`
+                `\x1b[33m[claude-codex-guard]\x1b[0m ⚠️  \x1b[1mCIRCUIT BREAKER ATIVADO:\x1b[0m Limite de loops atingido (${config.maxConsecutiveToolCalls}). Agente foi instruído a parar e reportar.`
               );
               notifyCircuitBreaker(currentProject, config.maxConsecutiveToolCalls);
             }
           } else {
-            console.log(`\x1b[36m[claude-guard]\x1b[0m → [\x1b[1m${currentProject}\x1b[0m] Req #${result.stats.totalRequests}: Direta (sem corte necessário)`);
+            console.log(`\x1b[36m[claude-codex-guard]\x1b[0m → [\x1b[1m${currentProject}\x1b[0m] Req #${result.stats.totalRequests}: Direta (sem corte necessário)`);
           }
 
           // Persist to SQLite with project association
@@ -358,7 +358,7 @@ export function createProxyServer(userConfig = {}) {
               circuitBreaker: result.circuitBreakerActivated ? 1 : 0
             });
           } catch (dbErr) {
-            console.error('[claude-guard] Failed to log request to SQLite:', dbErr.message);
+            console.error('[claude-codex-guard] Failed to log request to SQLite:', dbErr.message);
           }
 
           // Broadcast real-time event to connected dashboard clients
@@ -375,7 +375,7 @@ export function createProxyServer(userConfig = {}) {
           });
 
         } catch (err) {
-          console.warn('[claude-guard] Failed to parse JSON body, passing through:', err.message);
+          console.warn('[claude-codex-guard] Failed to parse JSON body, passing through:', err.message);
         }
 
         const bodyBuffer = Buffer.from(requestBody, 'utf-8');
@@ -396,7 +396,7 @@ export function createProxyServer(userConfig = {}) {
         });
 
         clientReq.on('error', err => {
-          console.error('[claude-guard] Forwarding error:', err.message);
+          console.error('[claude-codex-guard] Forwarding error:', err.message);
           if (!res.headersSent) {
             res.writeHead(502, { 'content-type': 'application/json' });
             res.end(JSON.stringify({ error: `Proxy error to ${targetHost}`, message: err.message }));
@@ -421,7 +421,7 @@ export function createProxyServer(userConfig = {}) {
       });
 
       clientReq.on('error', err => {
-        console.error('[claude-guard] Forwarding error:', err.message);
+        console.error('[claude-codex-guard] Forwarding error:', err.message);
         if (!res.headersSent) {
           res.writeHead(502, { 'content-type': 'application/json' });
           res.end(JSON.stringify({ error: `Proxy error to ${targetHost}`, message: err.message }));
@@ -462,16 +462,16 @@ export function createProxyServer(userConfig = {}) {
 if (process.argv[1] && process.argv[1].endsWith('proxy.js')) {
   const { server, config, optimizer, db } = createProxyServer();
   server.listen(config.port, config.host, () => {
-    console.log(`\x1b[32m✔ Claude-Guard Proxy ativo em http://${config.host}:${config.port}\x1b[0m`);
+    console.log(`\x1b[32m✔ Claude-Codex-Guard Proxy ativo em http://${config.host}:${config.port}\x1b[0m`);
     console.log(`  Alvo: https://${config.targetHost}:${config.targetPort}`);
-    console.log(`  SQLite persistente: ~/.config/claude-guard/history.db`);
+    console.log(`  SQLite persistente: ~/.config/claude-codex-guard/history.db`);
     console.log(`  Max tool chars: ${config.maxToolResultChars} | Keep recent turns: ${config.keepRecentToolTurns} | Max loops: ${config.maxConsecutiveToolCalls}\n`);
   });
 
   const cleanup = () => {
-    console.log('\n\x1b[36m[claude-guard]\x1b[0m Resumo da Sessão:');
+    console.log('\n\x1b[36m[claude-codex-guard]\x1b[0m Resumo da Sessão:');
     console.table(optimizer.getSummary());
-    console.log('\x1b[36m[claude-guard]\x1b[0m Acumulado no SQLite:');
+    console.log('\x1b[36m[claude-codex-guard]\x1b[0m Acumulado no SQLite:');
     console.table(db.getOverallStats());
     server.close(() => {
       db.close();

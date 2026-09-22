@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Claude-Guard npm shim: compresses noisy test/build progress outputs
+# Claude-Codex-Guard npm shim: compresses noisy test/build progress outputs
 REAL_BIN=$(which -a npm 2>/dev/null | grep -F -v "/shims/" | head -n 1)
 REAL_BIN=${REAL_BIN:-/usr/bin/npm}
 
@@ -16,7 +16,7 @@ if [ "$SUBCOMMAND" = "test" ] || [ "$SUBCOMMAND" = "run" ]; then
   if [ "$LINES" -gt 250 ]; then
     head -n 50 "$TMP_OUT"
     echo ""
-    echo "[... claude-guard npm shim: saída extensa de $LINES linhas enxugada. Exibindo final com erros/sumário ...]"
+    echo "[... claude-codex-guard npm shim: saída extensa de $LINES linhas enxugada. Exibindo final com erros/sumário ...]"
     echo ""
     tail -n 120 "$TMP_OUT"
   else

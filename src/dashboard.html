@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Claude-Guard - Dashboard em Tempo Real</title>
+  <title>Claude-Codex-Guard - Dashboard em Tempo Real</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%235268d8'/%3E%3Cpath d='M32 10 49 17v13c0 11-7 20-17 24-10-4-17-13-17-24V17z' fill='none' stroke='white' stroke-width='4'/%3E%3Cpath d='m24 31 5 5 11-12' fill='none' stroke='white' stroke-width='4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
   <style>
     /* Hallmark · genre: modern-minimal · macrostructure: Workbench · designed-as-app */
@@ -846,7 +846,7 @@
     <aside class="sidebar">
       <div class="sidebar-brand">
         <div class="brand-icon" aria-hidden="true">CG</div>
-        <div><strong>Claude-Guard</strong><span>Proxy & otimização</span></div>
+        <div><strong>Claude-Codex-Guard</strong><span>Proxy & otimização</span></div>
       </div>
       <nav class="sidebar-nav" aria-label="Navegação principal">
         <span class="nav-label">Workspace</span>
@@ -881,7 +881,7 @@
 
   <section class="welcome-row">
     <div><span class="section-kicker">Centro de controle</span><h1>Proteção e performance<br><em>em uma única visão.</em></h1></div>
-    <p>Veja o que o Claude-Guard está economizando, interceptando e bloqueando enquanto você trabalha.</p>
+    <p>Veja o que o Claude-Codex-Guard está economizando, interceptando e bloqueando enquanto você trabalha.</p>
   </section>
 
   <!-- KPI Cards -->
@@ -974,7 +974,7 @@
         <div class="system-list">
           <div>• <strong>Proxy Porta:</strong> <span class="system-value" id="sysPort">48080</span></div>
           <div>• <strong>Alvo Anthropic:</strong> <span class="system-value">api.anthropic.com:443</span></div>
-          <div>• <strong>Banco de Dados:</strong> <span class="system-value">~/.config/claude-guard/history.db</span></div>
+          <div>• <strong>Banco de Dados:</strong> <span class="system-value">~/.config/claude-codex-guard/history.db</span></div>
           <div>• <strong>Shims de Terminal:</strong> <span class="status-value">Ativos (cat, git, find, npm)</span></div>
           <div>• <strong>Bloqueio de Telemetria:</strong> <span class="status-value">Ativo (OTEL, Sentry, Logs)</span></div>
         </div>
@@ -1005,12 +1005,12 @@
           <span aria-hidden="true">✔</span> PROVA TÉCNICA: Tráfego de Rede 100% Interceptado e Abortado Localmente
         </div>
         <p class="proof-copy">
-          O <strong>Claude-Guard</strong> atua como um firewall local em <code>http://127.0.0.1:48080</code>. Quando o Claude Code ou Claude Desktop dispara requisições de métricas, traces ou logs, o proxy <strong>não abre conexão TCP ou TLS com a Anthropic</strong>.
+          O <strong>Claude-Codex-Guard</strong> atua como um firewall local em <code>http://127.0.0.1:48080</code>. Quando o Claude Code ou Claude Desktop dispara requisições de métricas, traces ou logs, o proxy <strong>não abre conexão TCP ou TLS com a Anthropic</strong>.
         </p>
         <div class="proof-details">
           <div>• <strong>Destino Upstream:</strong> <span class="proof-detail-value">0 bytes transmitidos</span></div>
           <div>• <strong>Status Retornado ao Claude:</strong> <span class="proof-detail-value">HTTP 200 OK (simulado)</span></div>
-          <div>• <strong>Headers Injetados:</strong> <code>x-claude-guard-blocked: true</code></div>
+          <div>• <strong>Headers Injetados:</strong> <code>x-claude-codex-guard-blocked: true</code></div>
           <div>• <strong>Consequência:</strong> <span class="proof-detail-note">Zero latência, sem vazamento de dados</span></div>
         </div>
       </div>
@@ -1084,7 +1084,7 @@
         statsRefreshPending = false;
         statsRefreshInFlight = true;
         try {
-          const response = await fetch('/claude-guard/stats');
+          const response = await fetch('/claude-codex-guard/stats');
           if (response.ok) updateStatsUI(await response.json());
         } catch (err) {
           console.warn('Erro ao atualizar estatísticas:', err);
@@ -1134,13 +1134,13 @@
     // Load initial stats
     async function fetchInitialData() {
       try {
-        const statsRes = await fetch('/claude-guard/stats');
+        const statsRes = await fetch('/claude-codex-guard/stats');
         if (statsRes.ok) {
           const data = await statsRes.json();
           updateStatsUI(data);
         }
 
-        const recentRes = await fetch('/claude-guard/recent');
+        const recentRes = await fetch('/claude-codex-guard/recent');
         if (recentRes.ok) {
           const recentList = await recentRes.json();
           if (Array.isArray(recentList) && recentList.length > 0) {
@@ -1170,7 +1170,7 @@
 
     async function fetchTelemetryData() {
       try {
-        const res = await fetch('/claude-guard/telemetry');
+        const res = await fetch('/claude-codex-guard/telemetry');
         if (!res.ok) return;
         const data = await res.json();
         
@@ -1453,7 +1453,7 @@
     function setupSSE() {
       const connDot = document.getElementById('connDot');
       const connText = document.getElementById('connText');
-      const source = new EventSource('/claude-guard/events');
+      const source = new EventSource('/claude-codex-guard/events');
 
       source.onopen = () => {
         connDot.style.backgroundColor = 'var(--emerald)';

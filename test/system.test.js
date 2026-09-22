@@ -12,7 +12,7 @@ const __dirname = path.dirname(__filename);
 const projectRoot = path.resolve(__dirname, '..');
 
 test('Config default port is 48080', () => {
-  const expectedPort = Number(process.env.CLAUDE_GUARD_PORT || 48080);
+  const expectedPort = Number(process.env.CLAUDE_CODEX_GUARD_PORT || 48080);
   assert.equal(defaultConfig.port, expectedPort, 'Config must respect the selected port');
   const config = loadConfig();
   assert.equal(config.port, expectedPort, 'Loaded config must respect the selected port');
@@ -31,10 +31,10 @@ test('Notifier module exports notification methods and runs without throwing', (
 });
 
 test('Python tray script exists, is executable and compiles cleanly', t => {
-  const trayScript = path.resolve(projectRoot, 'scripts/claude-guard-tray.py');
+  const trayScript = path.resolve(projectRoot, 'scripts/claude-codex-guard-tray.py');
   assert.ok(fs.existsSync(trayScript), 'Tray script must exist');
   
-  const tempDir = fs.mkdtempSync(path.join('/tmp', 'claude-guard-python-'));
+  const tempDir = fs.mkdtempSync(path.join('/tmp', 'claude-codex-guard-python-'));
   try {
     execSync(`python3 -m py_compile "${trayScript}"`, {
       env: { ...process.env, PYTHONPYCACHEPREFIX: tempDir }
@@ -48,7 +48,7 @@ test('Python tray script exists, is executable and compiles cleanly', t => {
 });
 
 test('CLI autostart status executes correctly and reports status', t => {
-  const guardBin = path.resolve(projectRoot, 'bin/claude-guard.js');
+  const guardBin = path.resolve(projectRoot, 'bin/claude-codex-guard.js');
   let output;
   try {
     output = execSync(`node "${guardBin}" autostart status`, { encoding: 'utf-8' });

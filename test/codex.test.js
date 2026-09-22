@@ -10,7 +10,7 @@ test('detectClientType keeps shared proxy sessions agnostic across clients', () 
   assert.equal(detectClientType('/v1/messages', {}, 'desktop'), 'desktop');
   assert.equal(detectClientType('/backend-api/codex/responses', {}, 'desktop'), 'codex-cli');
   assert.equal(detectClientType('/v1/responses', { 'user-agent': 'ChatGPT Desktop/1.0' }, 'desktop'), 'codex-desktop');
-  assert.equal(detectClientType('/v1/responses', { 'x-claude-guard-client': 'codex-desktop' }, 'desktop'), 'codex-desktop');
+  assert.equal(detectClientType('/v1/responses', { 'x-claude-codex-guard-client': 'codex-desktop' }, 'desktop'), 'codex-desktop');
   assert.equal(detectClientType('/v1/messages', { 'x-client-type': 'claude-desktop' }, 'codex-cli'), 'claude-desktop');
 });
 
@@ -59,7 +59,7 @@ test('TokenOptimizer truncates excessively large OpenAI tool results', () => {
   assert.ok(res.savedTokens > 1200);
 
   const finalContent = res.payload.messages[2].content;
-  assert.ok(finalContent.includes('claude-guard:'));
+  assert.ok(finalContent.includes('claude-codex-guard:'));
   assert.ok(finalContent.length <= 650);
 });
 
@@ -78,7 +78,7 @@ test('TokenOptimizer truncates OpenAI Responses function_call_output items', () 
 
   assert.equal(result.modified, true);
   assert.ok(result.savedTokens > 300);
-  assert.ok(payload.input[2].output.includes('claude-guard:'));
+  assert.ok(payload.input[2].output.includes('claude-codex-guard:'));
   assert.ok(payload.input[2].output.length <= 300);
 });
 
@@ -221,7 +221,7 @@ test('Proxy intercepts /v1/chat/completions, routes to OpenAI upstream, optimize
     const postData = JSON.stringify({
       model: 'gpt-5.6-luna',
       messages: [
-        { role: 'user', content: 'Run test in /home/emerson-vieira/dev/opensource/claude-guard' },
+        { role: 'user', content: 'Run test in /home/emerson-vieira/dev/opensource/claude-codex-guard' },
         { role: 'assistant', tool_calls: [{ id: 'c1', type: 'function', function: { name: 'run', arguments: '{}' } }] },
         { role: 'tool', tool_call_id: 'c1', content: hugeLog }
       ]
@@ -252,11 +252,11 @@ test('Proxy intercepts /v1/chat/completions, routes to OpenAI upstream, optimize
     assert.equal(upstreamReceivedBody.model, 'gpt-5.6-luna');
     // Content should have been truncated by optimizer
     const optimizedContent = upstreamReceivedBody.messages[2].content;
-    assert.ok(optimizedContent.includes('claude-guard:'));
+    assert.ok(optimizedContent.includes('claude-codex-guard:'));
     assert.ok(optimizedContent.length < 500);
 
-    // Verify DB recorded it under claude-guard project
-    const stats = db.getOverallStats('claude-guard');
+    // Verify DB recorded it under claude-codex-guard project
+    const stats = db.getOverallStats('claude-codex-guard');
     assert.equal(stats.totalRequests, 1);
     assert.ok(stats.totalSavedTokens > 200);
   } finally {
@@ -294,7 +294,7 @@ test('Proxy intercepts ChatGPT Codex backend API and routes it to the Codex upst
     const postData = JSON.stringify({
       model: 'gpt-5.6-luna',
       input: [
-        { role: 'user', content: 'run checks in /home/emerson-vieira/dev/opensource/claude-guard' },
+        { role: 'user', content: 'run checks in /home/emerson-vieira/dev/opensource/claude-codex-guard' },
         { type: 'function_call_output', call_id: 'call_1', output: 'Z'.repeat(2000) }
       ]
     });
@@ -315,8 +315,8 @@ test('Proxy intercepts ChatGPT Codex backend API and routes it to the Codex upst
     });
 
     assert.equal(response.statusCode, 200);
-    assert.ok(upstreamReceivedBody.input[1].output.includes('claude-guard:'));
-    assert.equal(db.getOverallStats('claude-guard').totalRequests, 1);
+    assert.ok(upstreamReceivedBody.input[1].output.includes('claude-codex-guard:'));
+    assert.equal(db.getOverallStats('claude-codex-guard').totalRequests, 1);
     const codexClient = db.getClientStats().find(client => client.client_type.startsWith('codex'));
     assert.equal(codexClient.request_count, 1);
   } finally {
@@ -348,9 +348,9 @@ test('Proxy registers a Codex Desktop session before its first request', async (
       const req = http.request({
         hostname: '127.0.0.1',
         port: proxyPort,
-        path: '/claude-guard/register',
+        path: '/claude-codex-guard/register',
         method: 'POST',
-        headers: { 'x-claude-guard-client': 'codex-desktop' }
+        headers: { 'x-claude-codex-guard-client': 'codex-desktop' }
       }, res => {
         let body = '';
         res.on('data', chunk => body += chunk);

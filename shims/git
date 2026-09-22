@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Claude-Guard git shim: limits unbounded log and diff floods
+# Claude-Codex-Guard git shim: limits unbounded log and diff floods
 REAL_BIN=$(which -a git 2>/dev/null | grep -F -v "/shims/" | head -n 1)
 REAL_BIN=${REAL_BIN:-/usr/bin/git}
 
@@ -29,7 +29,7 @@ if [ "$SUBCOMMAND" = "diff" ]; then
   if [ "$DIFF_LINES" -gt 300 ]; then
     head -n 200 "$TMP_OUT"
     echo ""
-    echo "[... claude-guard git shim: diff grande com $DIFF_LINES linhas. Exibidas primeiras 200 linhas. Use 'git diff --stat' ou aponte arquivos específicos ...]"
+    echo "[... claude-codex-guard git shim: diff grande com $DIFF_LINES linhas. Exibidas primeiras 200 linhas. Use 'git diff --stat' ou aponte arquivos específicos ...]"
     echo ""
     tail -n 50 "$TMP_OUT"
     rm -f "$TMP_OUT"
