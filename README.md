@@ -2,7 +2,7 @@
 
 **Proxy local agnóstico de provedor para Claude e Codex, em CLI e nos fluxos desktop que aceitam endpoint configurável.**
 
-Desenvolvido em **Node.js** puro (sem dependências externas), o projeto otimiza requisições JSON de Anthropic Messages, OpenAI Chat Completions/Responses e Codex `/backend-api/`, além de bloquear telemetria localmente.
+Desenvolvido em **Node.js** puro (sem dependências externas) e testado em **Ubuntu Linux** (GNOME Shell / Wayland / X11), o projeto otimiza requisições JSON de Anthropic Messages, OpenAI Chat Completions/Responses e Codex `/backend-api/`, além de bloquear telemetria localmente.
 
 Versão atual: **1.3.4**.
 
@@ -30,44 +30,96 @@ O **Claude-Codex-Guard** atua em duas frentes complementares:
 
 ---
 
-## Como Usar
+## Instalação e Configuração
 
-### Instalação global e atualização automática
+> [!NOTE]
+> **Compatibilidade e Ambiente**:
+> - Desenvolvido e validado em **Ubuntu Linux** (22.04 LTS e 24.04 LTS, GNOME Shell com Wayland e X11, systemd `--user`).
+> - Requer **Node.js >= 22** (utiliza o módulo nativo `node:sqlite` para persistência local rápida, sem compilações externas).
+> - Sem dependências externas (`node_modules` de terceiros não são necessários).
 
-A instalação identifica os clientes disponíveis no ambiente — Claude CLI/Code, Codex CLI, Claude Desktop e ChatGPT/Codex Desktop — e registra a origem da instalação:
+### Passo 1: Baixar / Clonar o Repositório
+
+Clone o repositório em uma pasta local no seu ambiente:
 
 ```bash
-claude-codex-guard install
+git clone https://github.com/mensonones/claude-codex-guard.git
+cd claude-codex-guard
 ```
 
-Para atualizar manualmente a instalação global:
+### Passo 2: Instalação Global Automática
+
+A partir da raiz do repositório clonado, execute o instalador:
 
 ```bash
+node bin/claude-codex-guard.js install
+```
+
+O que o instalador faz automaticamente:
+1. Registra os comandos globais `claude-codex-guard` e `codex-guard` no seu ambiente.
+2. Identifica os clientes instalados no sistema — **Claude CLI / Code**, **Codex CLI**, **Claude Desktop** e **ChatGPT / Codex Desktop**.
+3. Reconfigura os wrappers desktop em `~/.local/bin/` (`claude-desktop` e `chatgpt`), criando backups dos arquivos anteriores (`*.backup`). Se preferir instalar apenas para CLI sem alterar aplicativos gráficos, utilize a flag `--no-desktop`:
+   ```bash
+   node bin/claude-codex-guard.js install --no-desktop
+   ```
+4. Salva o caminho de origem em `~/.config/claude-codex-guard/installation.json` para permitir atualizações automáticas futuras.
+
+### Passo 3: Inicialização Automática no Sistema (Recomendado)
+
+No Ubuntu e distros baseadas em systemd, ative a inicialização do proxy junto ao login do usuário:
+
+```bash
+claude-codex-guard autostart enable
+```
+
+Para checar o status do serviço:
+```bash
+claude-codex-guard autostart status
+```
+
+Se desejar desativar:
+```bash
+claude-codex-guard autostart disable
+```
+
+### Atualizações Futuras
+
+Para atualizar a instalação global após puxar novas atualizações com `git pull`:
+
+```bash
+# Na pasta do repositório:
+git pull
+
+# Atualizar a instalação global:
 claude-codex-guard update
 ```
 
-Quando uma nova versão for encontrada no caminho de origem registrado, o comando global atualiza a instalação automaticamente antes de executar a ação solicitada. Use `--no-desktop` para instalar sem reconfigurar launchers gráficos.
+*(Além disso, ao executar `claude-codex-guard`, o comando verifica automaticamente se a pasta de origem possui versão mais recente e atualiza a instalação global).*
+
+---
+
+## Como Usar
 
 ### 1. Com o Claude Code CLI
 ```bash
-# Executar a partir da pasta do projeto:
-./bin/claude-codex-guard.js
-
-# Ou após 'npm link' global:
+# Executar diretamente com proxy e shims protetores:
 claude-codex-guard
+
+# Ou passando comandos/prompts normalmente:
+claude-codex-guard "analise o diff atual"
 ```
 
 ### 2. Com o OpenAI Codex CLI
 Você pode usar tanto o comando dedicado `codex-guard` quanto `claude-codex-guard codex`:
 ```bash
 # Executar com proteção e shims:
-./bin/codex-guard.js
+codex-guard
 
-# Ou passar quaisquer opções do Codex:
-./bin/codex-guard.js exec "revisar o diff atual"
-./bin/codex-guard.js -m gpt-5.6-luna
+# Ou passar quaisquer opções e comandos do Codex:
+codex-guard exec "revisar o diff atual"
+codex-guard -m gpt-5.6-luna
 
-# Ou via alias:
+# Ou via comando principal:
 claude-codex-guard codex
 ```
 
@@ -77,15 +129,15 @@ Mesmo quando o Codex reutiliza um proxy já aberto pelo Claude Desktop, as requi
 
 O launcher registra a sessão na abertura. A captura de tokens só é possível quando o cliente desktop usa o endpoint/base URL ou proxy configurável. O aplicativo ChatGPT desktop oficial pode ignorar essas variáveis e usar uma conexão própria; nesse caso ele não oferece um ponto suportado para interceptação e deve ser validado pelo status/dashboard, sem assumir que foi capturado.
 
-### 3. Integração Automática com Aplicativos Desktop
+### 3. Com Aplicativos Desktop (Claude Desktop & ChatGPT / Codex Desktop)
 
-#### Para Claude Desktop:
+Caso precise reconfigurar os atalhos desktop individualmente a qualquer momento:
+
 ```bash
+# Para Claude Desktop:
 claude-codex-guard setup-desktop
-```
 
-#### Para ChatGPT / Codex Desktop:
-```bash
+# Para ChatGPT / Codex Desktop:
 claude-codex-guard setup-codex-desktop
 # (ou pelo alias: codex-guard setup-desktop)
 ```
@@ -93,15 +145,15 @@ claude-codex-guard setup-codex-desktop
 O launcher exporta `OPENAI_BASE_URL` e `CODEX_API_BASE` e cria um `CODEX_HOME` isolado com provider HTTP-only, preservando o `auth.json` existente. Isso evita alterar o `~/.codex/config.toml` do usuário. Depois de alterar essa configuração, reinicie o proxy e o aplicativo para renovar o ambiente do processo.
 
 A partir de agora:
-1. Sempre que você abrir o Claude Desktop ou o ChatGPT Desktop, o proxy otimizador sobe silenciosamente em background.
+1. Sempre que você abrir o Claude Desktop ou o ChatGPT Desktop pelo menu do sistema ou terminal, o proxy sobe silenciosamente em background.
 2. Clientes que aceitam endpoint configurável passam pelo filtro anti-desperdício; os shims são aplicados apenas ao processo lançado pelo wrapper.
 3. Você pode consultar em tempo real a economia de tokens com:
    ```bash
    claude-codex-guard status
    ```
 
-### Dashboard Web em Tempo Real
-Monitore visualmente o trabalho do Claude-Codex-Guard diretamente pelo navegador enquanto utiliza o Claude Desktop ou Claude Code:
+### 4. Dashboard Web em Tempo Real
+Monitore visualmente o trabalho do Claude-Codex-Guard diretamente pelo navegador enquanto utiliza o Claude Desktop, Claude Code ou Codex:
 
 ```bash
 # Abre o painel em tempo real no seu navegador padrão:
@@ -123,7 +175,7 @@ O painel foi redesenhado como um cockpit claro e compacto, com navegação later
 
 O dashboard usa os dados disponíveis no SQLite e na sessão atual. Quando não há eventos, os cartões exibem estados vazios em vez de inventar métricas.
 
-### Relatórios de Economia & Histórico (SQLite)
+### 5. Relatórios de Economia & Histórico (SQLite)
 O Claude-Codex-Guard grava todas as métricas em um banco SQLite nativo (`~/.config/claude-codex-guard/history.db`). Você pode consultar seus relatórios no terminal a qualquer momento:
 
 ```bash
@@ -144,8 +196,17 @@ claude-codex-guard report --project argus --export csv > argus_economia.csv
 claude-codex-guard report --clear
 ```
 
-### Opção 3: Modo Proxy Standalone
-Se preferir rodar o proxy em segundo plano manualmente:
+### 6. Indicador na Bandeja do Sistema (System Tray no Ubuntu / Linux)
+O Claude-Codex-Guard integra-se nativamente com ambientes Linux (GNOME Shell / Wayland, Ubuntu AppIndicators, KDE):
+- **Notificação OSD (`notify-send`)**: emitida automaticamente ao iniciar o proxy e ao acionar o Circuit Breaker.
+- **Indicador na Bandeja (System Tray)**: exibe o escudo protetor no painel superior com menu de atalho:
+  ```bash
+  claude-codex-guard tray
+  ```
+  O menu da bandeja permite abrir o Dashboard com 1 clique, inspecionar a economia de tokens acumulada e encerrar o serviço graciosamente.
+
+### 7. Modo Proxy Manual / Standalone
+Se preferir rodar o proxy em primeiro plano manualmente:
 
 ```bash
 # 1. Inicia o proxy (emite notificação no desktop e sobe ícone na bandeja)
@@ -155,31 +216,6 @@ claude-codex-guard proxy
 export ANTHROPIC_BASE_URL="http://127.0.0.1:48080"
 claude
 ```
-
-### 4. Notificações & Bandeja do Sistema (Linux)
-O Claude-Codex-Guard integra-se nativamente com ambientes Linux (GNOME Shell / Wayland, Ubuntu AppIndicators, KDE):
-- **Notificação OSD (`notify-send`)**: emitida automaticamente ao iniciar o proxy e ao acionar o Circuit Breaker.
-- **Indicador na Bandeja (System Tray)**: exibe o escudo protetor no painel superior com menu de atalho:
-  ```bash
-  # Iniciar o indicador de bandeja individualmente:
-  claude-codex-guard tray
-  ```
-  O menu da bandeja permite abrir o Dashboard com 1 clique, inspecionar a economia de tokens acumulada e encerrar o serviço graciosamente.
-
-### 5. Inicialização Automática com o Sistema (Autostart)
-Configure o Claude-Codex-Guard para iniciar automaticamente com o seu sistema operacional via `systemd --user` e XDG Autostart:
-
-```bash
-# Ativar início automático com o sistema:
-claude-codex-guard autostart enable
-
-# Verificar status da inicialização automática:
-claude-codex-guard autostart status
-
-# Desativar e remover serviços de inicialização:
-claude-codex-guard autostart disable
-```
-*(Também disponível através de `codex-guard autostart [enable|disable|status]`)*
 
 
 ---
