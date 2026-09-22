@@ -1,10 +1,10 @@
 # Claude-Guard & Codex-Guard
 
-**Otimizador Ativo de Tokens e Interceptador de Loops para Claude Code e OpenAI Codex.**
+**Proxy local agnóstico de provedor para Claude e Codex, em CLI e nos fluxos desktop que aceitam endpoint configurável.**
 
-Desenvolvido em **Node.js** puro (sem dependências externas), o **Claude-Guard** atua ativamente para reduzir drasticamente o consumo de tokens e cortar requisições repetitivas ou loops agênticos descontrolados tanto no **Claude Code / Desktop** quanto no **OpenAI Codex CLI / Desktop**.
+Desenvolvido em **Node.js** puro (sem dependências externas), o projeto otimiza requisições JSON de Anthropic Messages, OpenAI Chat Completions/Responses e Codex `/backend-api/`, além de bloquear telemetria localmente.
 
-Versão atual: **1.3.3**.
+Versão atual: **1.3.4**.
 
 ---
 
@@ -71,11 +71,11 @@ Você pode usar tanto o comando dedicado `codex-guard` quanto `claude-guard code
 claude-guard codex
 ```
 
-O wrapper do Codex aponta `OPENAI_BASE_URL` para o proxy local. Assim, as chamadas JSON chegam ao otimizador, ao SQLite e ao feed SSE da dashboard. O wrapper não usa `HTTPS_PROXY` nesse fluxo, pois isso criaria um túnel CONNECT criptografado impossível de inspecionar.
+O wrapper do Codex injeta um provider local HTTP-only (`wire_api = "responses"`, `supports_websockets = false`) apontando para o proxy. Isso é necessário porque o Codex pode ignorar `OPENAI_BASE_URL` quando há um `model_providers.<nome>.base_url` configurado e usa WebSocket por padrão. As chamadas JSON HTTP chegam ao otimizador, ao SQLite e ao feed SSE da dashboard. O wrapper não usa `HTTPS_PROXY` nesse fluxo, pois isso criaria um túnel CONNECT criptografado impossível de inspecionar.
 
 Mesmo quando o Codex reutiliza um proxy já aberto pelo Claude Desktop, as requisições Codex são separadas por cliente e aparecem no resumo de agentes da dashboard.
 
-O launcher do ChatGPT/Codex Desktop também registra a sessão na abertura, então o agente aparece na dashboard antes do primeiro prompt.
+O launcher registra a sessão na abertura. A captura de tokens só é possível quando o cliente desktop usa o endpoint/base URL ou proxy configurável. O aplicativo ChatGPT desktop oficial pode ignorar essas variáveis e usar uma conexão própria; nesse caso ele não oferece um ponto suportado para interceptação e deve ser validado pelo status/dashboard, sem assumir que foi capturado.
 
 ### 3. Integração Automática com Aplicativos Desktop
 
@@ -90,11 +90,11 @@ claude-guard setup-codex-desktop
 # (ou pelo alias: codex-guard setup-desktop)
 ```
 
-O launcher também exporta `OPENAI_BASE_URL` e `CODEX_API_BASE` para a porta local. Depois de alterar essa configuração, reinicie o proxy e o aplicativo desktop para renovar o ambiente do processo.
+O launcher exporta `OPENAI_BASE_URL` e `CODEX_API_BASE` e cria um `CODEX_HOME` isolado com provider HTTP-only, preservando o `auth.json` existente. Isso evita alterar o `~/.codex/config.toml` do usuário. Depois de alterar essa configuração, reinicie o proxy e o aplicativo para renovar o ambiente do processo.
 
 A partir de agora:
 1. Sempre que você abrir o Claude Desktop ou o ChatGPT Desktop, o proxy otimizador sobe silenciosamente em background.
-2. Todas as ações de código executadas pelos apps usam os shims (`cat`, `git`, `find`, `npm`) e passam pelo filtro anti-desperdício de tokens.
+2. Clientes que aceitam endpoint configurável passam pelo filtro anti-desperdício; os shims são aplicados apenas ao processo lançado pelo wrapper.
 3. Você pode consultar em tempo real a economia de tokens com:
    ```bash
    claude-guard status

@@ -27,18 +27,62 @@ function commandPath(command) {
   }
 }
 
+function firstExistingPath(candidates) {
+  return candidates.find(candidate => candidate && fs.existsSync(candidate)) || null;
+}
+
+function desktopCandidates(home = process.env.HOME || '.') {
+  return {
+    claude: [
+      commandPath('claude-desktop'),
+      path.resolve(home, '.local/bin/claude-desktop'),
+      '/usr/lib/claude-desktop/claude-desktop',
+      '/usr/bin/claude-desktop',
+      '/opt/Claude/claude'
+    ],
+    codex: [
+      commandPath('chatgpt'),
+      commandPath('codex-desktop'),
+      '/usr/lib/chatgpt/codex-launcher',
+      '/usr/lib/chatgpt/chatgpt',
+      '/usr/bin/chatgpt',
+      path.resolve(home, '.local/bin/chatgpt'),
+      '/Applications/ChatGPT.app/Contents/MacOS/ChatGPT'
+    ]
+  };
+}
+
+function hasCodexConfigOverride(args, key) {
+  return args.some((arg, index) => {
+    if (arg === key || arg === `--config=${key}` || arg.startsWith(`${key}=`)) return true;
+    return (arg === '-c' || arg === '--config') && typeof args[index + 1] === 'string' &&
+      args[index + 1].startsWith(`${key}=`);
+  });
+}
+
+function codexGuardConfigArgs(baseUrl, args) {
+  const provider = process.env.CLAUDE_GUARD_CODEX_PROVIDER || 'claude-guard';
+  const providerBase = `${baseUrl}/backend-api/codex`;
+  const providerDefinition = `model_providers.${provider}={ name="Claude Guard", base_url="${providerBase}", wire_api="responses", requires_openai_auth=true, supports_websockets=false }`;
+  const overrides = [];
+
+  // OPENAI_BASE_URL is ignored when Codex has a selected custom provider. A
+  // dedicated HTTP-only provider makes the routing deterministic and avoids
+  // the Responses WebSocket path, which this JSON proxy cannot inspect.
+  if (!hasCodexConfigOverride(args, `model_providers.${provider}`)) {
+    overrides.push('-c', providerDefinition);
+  }
+  if (!hasCodexConfigOverride(args, 'model_provider')) {
+    overrides.push('-c', `model_provider="${provider}"`);
+  }
+  return overrides;
+}
+
 function detectEnvironment() {
   const home = process.env.HOME || '.';
-  const claudeDesktop = [
-    path.resolve(home, '.local/bin/claude-desktop'),
-    '/usr/lib/claude-desktop/claude-desktop',
-    '/usr/bin/claude-desktop'
-  ].find(candidate => fs.existsSync(candidate)) || null;
-  const codexDesktop = [
-    '/usr/lib/chatgpt/codex-launcher',
-    '/usr/bin/chatgpt',
-    path.resolve(home, '.local/bin/chatgpt')
-  ].find(candidate => fs.existsSync(candidate)) || null;
+  const candidates = desktopCandidates(home);
+  const claudeDesktop = firstExistingPath(candidates.claude);
+  const codexDesktop = firstExistingPath(candidates.codex);
 
   return {
     claudeCli: commandPath('claude'),
@@ -108,7 +152,7 @@ function handleInstallCommand() {
   installGlobal(projectRoot, environment);
 
   if (!args.includes('--no-desktop')) {
-    if (environment.claudeDesktop && fs.existsSync(path.resolve(process.env.HOME || '.', '.local/bin/claude-desktop'))) {
+    if (environment.claudeDesktop) {
       runSetupIfDetected('setup-desktop', environment.claudeDesktop);
     }
     if (environment.codexDesktop) {
@@ -470,11 +514,14 @@ else if (args[0] === 'dashboard' || args[0] === 'ui') {
 // ----------------------------------------------------
 else if (args[0] === 'setup-desktop') {
   const config = loadConfig();
-  const launcherPath = path.resolve(process.env.HOME, '.local/bin/claude-desktop');
-  if (!fs.existsSync(launcherPath)) {
-    console.error(`\x1b[31mErro: Não foi encontrado o launcher do Claude Desktop em ${launcherPath}\x1b[0m`);
+  const launcherPath = path.resolve(process.env.HOME || '.', '.local/bin/claude-desktop');
+  const realBin = firstExistingPath(desktopCandidates().claude.filter(candidate => candidate !== launcherPath));
+  if (!realBin) {
+    console.error('\x1b[31mErro: Claude Desktop não foi encontrado neste sistema.\x1b[0m');
     process.exit(1);
   }
+
+  fs.mkdirSync(path.dirname(launcherPath), { recursive: true });
 
   const backupPath = `${launcherPath}.backup`;
   if (!fs.existsSync(backupPath)) {
@@ -510,7 +557,7 @@ fi
 export ANTHROPIC_BASE_URL="http://127.0.0.1:${config.port}"
 export PATH="$SHIMS_DIR:$PATH"
 
-exec /usr/lib/claude-desktop/claude-desktop --ozone-platform=x11 "$@"
+exec ${JSON.stringify(realBin)} --ozone-platform=x11 "$@"
 `;
 
   fs.writeFileSync(launcherPath, script, { mode: 0o755 });
@@ -544,9 +591,11 @@ else if (args[0] === 'setup-codex-desktop') {
   }
 
   // Find real ChatGPT / Codex desktop binary
-  let realBin = '/usr/lib/chatgpt/codex-launcher';
-  if (!fs.existsSync(realBin)) {
-    realBin = '/usr/bin/chatgpt';
+  const launcherPath = path.resolve(process.env.HOME || '.', '.local/bin/chatgpt');
+  const realBin = firstExistingPath(desktopCandidates().codex.filter(candidate => candidate !== launcherPath));
+  if (!realBin) {
+    console.error('\x1b[31mErro: ChatGPT/Codex Desktop não foi encontrado neste sistema.\x1b[0m');
+    process.exit(1);
   }
 
   const script = `#!/usr/bin/env bash
@@ -582,6 +631,27 @@ unset HTTP_PROXY HTTPS_PROXY ALL_PROXY all_proxy
 export CLAUDE_GUARD_CLIENT="codex-desktop"
 export DO_NOT_TRACK="1"
 export DISABLE_TELEMETRY="1"
+
+# O Codex embutido pode ignorar OPENAI_BASE_URL quando já existe um provider
+# selecionado. Use um CODEX_HOME isolado, preservando a autenticação existente,
+# para forçar o provider HTTP local sem alterar ~/.codex/config.toml.
+GUARD_CODEX_HOME="$HOME/.config/claude-guard/codex-home"
+mkdir -p "$GUARD_CODEX_HOME"
+if [ -f "$HOME/.codex/auth.json" ] && [ ! -e "$GUARD_CODEX_HOME/auth.json" ]; then
+  ln -s "$HOME/.codex/auth.json" "$GUARD_CODEX_HOME/auth.json" 2>/dev/null || true
+fi
+cat > "$GUARD_CODEX_HOME/config.toml" <<EOF
+model_provider = "claude-guard"
+
+[model_providers.claude-guard]
+name = "Claude Guard"
+base_url = "http://127.0.0.1:${config.port}/backend-api/codex"
+wire_api = "responses"
+requires_openai_auth = true
+supports_websockets = false
+http_headers = { "x-claude-guard-client" = "codex-desktop" }
+EOF
+export CODEX_HOME="$GUARD_CODEX_HOME"
 
 # Registra a sessão na dashboard mesmo antes do primeiro prompt.
 /usr/bin/curl -sS -X POST "http://127.0.0.1:${config.port}/claude-guard/register" \\
@@ -851,13 +921,8 @@ else if (args[0] === 'codex') {
   }
 
   const finalArgs = [...codexArgs];
-  const localCodexBase = `http://${config.host}:${config.port}/backend-api/`;
-  if (!finalArgs.some((arg, index) => arg === 'chatgpt_base_url' || (typeof arg === 'string' && arg.includes('chatgpt_base_url=')))) {
-    finalArgs.unshift('-c', `chatgpt_base_url="${localCodexBase}"`);
-  }
-  if (!finalArgs.includes('respect_system_proxy') && !finalArgs.some(a => a.includes('respect_system_proxy'))) {
-    finalArgs.unshift('--enable', 'respect_system_proxy');
-  }
+  const localCodexBase = `http://${config.host}:${config.port}`;
+  finalArgs.unshift(...codexGuardConfigArgs(localCodexBase, finalArgs));
 
   const isAlreadyRunning = await checkProxyAlive(config.host, config.port);
   if (isAlreadyRunning) {

@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.4] - 2026-09-22
+
+- Roteamento e identificação de clientes passaram a ser agnósticos ao processo que iniciou o proxy, separando Claude e Codex quando compartilham um daemon.
+- Headers internos de identificação não são mais encaminhados aos provedores.
+- Launchers desktop agora detectam caminhos reais disponíveis, não sobrescrevem binários do sistema e suportam instalações fora dos caminhos Linux originais.
+- Documentação esclarece a limitação de aplicativos desktop que ignoram bases de API configuráveis.
+
 ## 1.3.3 — 2026-09-22
 
 - Sessões do Codex Desktop agora são registradas na abertura do launcher, antes do primeiro prompt.

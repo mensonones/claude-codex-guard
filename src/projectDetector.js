@@ -14,7 +14,8 @@ function cleanPath(raw) {
 export function detectProjectFromPayload(payload) {
   if (!payload) return { projectName: 'Geral', projectPath: null };
 
-  let textToScan = '';
+  let textToScan = typeof payload.instructions === 'string' ? payload.instructions : '';
+  if (typeof payload.input === 'string') textToScan += ' ' + payload.input;
 
   // 1. Scan system prompt
   if (typeof payload.system === 'string') {
@@ -83,8 +84,16 @@ export function detectProjectFromPayload(payload) {
     collectInputText(payload.input);
   }
 
+  // Codex Desktop includes the workspace in an XML environment context.
+  const xmlCwd = textToScan.match(/<cwd>\s*([^<>]+?)\s*<\/cwd>/i);
+  if (xmlCwd && /^(?:\/|~\/)/.test(xmlCwd[1])) {
+    const projectPath = cleanPath(xmlCwd[1]);
+    const projectName = path.basename(projectPath);
+    if (projectName && projectName !== '~') return { projectName, projectPath };
+  }
+
   // Match explicit working directory / cwd pattern
-  const cwdRegex = /(?:working directory|cwd|directory(?:\s+is)?):\s*([\/~][^\s\r\n\(\)\'\"]+)/i;
+  const cwdRegex = /(?:working directory|cwd|directory(?:\s+is)?):\s*([\/~][^<>\s\r\n\(\)\'\"]+)/i;
   const match = textToScan.match(cwdRegex);
   if (match && match[1]) {
     const rawPath = cleanPath(match[1]);
@@ -97,7 +106,7 @@ export function detectProjectFromPayload(payload) {
   }
 
   // Match absolute dev paths like /home/user/dev/... or /home/user/workspace/...
-  const devPathRegex = /(\/(?:home|Users)\/[^\/\s]+\/(?:dev|projects|workspace|code)\/[^\s\r\n\(\)\'\"]+)/i;
+  const devPathRegex = /(\/(?:home|Users)\/[^\/\s]+\/(?:dev|projects|workspace|code)\/[^<>\s\r\n\(\)\'\"]+)/i;
   const devMatch = textToScan.match(devPathRegex);
   if (devMatch && devMatch[1]) {
     let clean = cleanPath(devMatch[1]);

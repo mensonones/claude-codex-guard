@@ -45,3 +45,19 @@ test('detectProjectFromPayload falls back to Geral if no path found', () => {
   assert.equal(res.projectName, 'Geral');
   assert.equal(res.projectPath, null);
 });
+
+test('Codex XML cwd takes priority over unrelated paths and preserves spaces', () => {
+  const result = detectProjectFromPayload({
+    instructions: 'Skills: /home/user/dev/another-project/SKILL.md',
+    input: [{ role: 'user', content: [{ type: 'input_text', text:
+      '<environment_context><cwd>/home/user/dev/my project</cwd></environment_context>' }] }]
+  });
+  assert.deepEqual(result, { projectName: 'my project', projectPath: '/home/user/dev/my project' });
+});
+
+test('Responses instructions and string input support XML cwd', () => {
+  for (const field of ['instructions', 'input']) {
+    assert.deepEqual(detectProjectFromPayload({ [field]: '<cwd>/tmp/example</cwd>' }),
+      { projectName: 'example', projectPath: '/tmp/example' });
+  }
+});

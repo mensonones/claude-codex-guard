@@ -4,7 +4,15 @@ import http from 'node:http';
 import { TokenOptimizer } from '../src/optimizer.js';
 import { defaultConfig } from '../src/config.js';
 import { detectProjectFromPayload } from '../src/projectDetector.js';
-import { createProxyServer } from '../src/proxy.js';
+import { createProxyServer, detectClientType } from '../src/proxy.js';
+
+test('detectClientType keeps shared proxy sessions agnostic across clients', () => {
+  assert.equal(detectClientType('/v1/messages', {}, 'desktop'), 'desktop');
+  assert.equal(detectClientType('/backend-api/codex/responses', {}, 'desktop'), 'codex-cli');
+  assert.equal(detectClientType('/v1/responses', { 'user-agent': 'ChatGPT Desktop/1.0' }, 'desktop'), 'codex-desktop');
+  assert.equal(detectClientType('/v1/responses', { 'x-claude-guard-client': 'codex-desktop' }, 'desktop'), 'codex-desktop');
+  assert.equal(detectClientType('/v1/messages', { 'x-client-type': 'claude-desktop' }, 'codex-cli'), 'claude-desktop');
+});
 
 test('TokenOptimizer leaves simple OpenAI messages untouched', () => {
   const optimizer = new TokenOptimizer(defaultConfig);
@@ -358,4 +366,38 @@ test('Proxy registers a Codex Desktop session before its first request', async (
     server.close();
     db.close();
   }
+});
+
+test('Codex Desktop requests keep conversation sessions and projects separate', async (t) => {
+  const upstream = http.createServer((req, res) => { req.resume(); req.on('end', () => res.end('{}')); });
+  await new Promise(resolve => upstream.listen(0, '127.0.0.1', resolve));
+  const { server, db } = createProxyServer({ dbPath: ':memory:',
+    codexTargetHost: '127.0.0.1', codexTargetPort: upstream.address().port });
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  t.after(async () => {
+    await new Promise(resolve => server.close(resolve));
+    await new Promise(resolve => upstream.close(resolve));
+    db.close();
+  });
+  async function send(session, cwd) {
+    await new Promise((resolve, reject) => {
+      const req = http.request({ hostname: '127.0.0.1', port: server.address().port,
+        path: '/backend-api/codex/responses', method: 'POST',
+        headers: { 'content-type': 'application/json', session_id: session, originator: 'codex_desktop' }
+      }, res => { res.resume(); res.on('end', resolve); });
+      req.on('error', reject);
+      req.end(JSON.stringify({ model: 'test', input: [{ role: 'user', content:
+        cwd ? `<environment_context><cwd>${cwd}</cwd></environment_context>` : 'continue' }] }));
+    });
+  }
+  await send('conversation-a', '/tmp/project-a');
+  await send('conversation-b', '/tmp/project-b');
+  await send('conversation-a');
+  await send('conversation-c');
+  const rows = db.db.prepare(`SELECT r.session_uuid, r.project_name, s.client_type
+    FROM requests r JOIN sessions s USING (session_uuid) ORDER BY r.id`).all();
+  assert.deepEqual(rows.map(row => row.project_name), ['project-a', 'project-b', 'project-a', 'Geral']);
+  assert.equal(rows[0].session_uuid, rows[2].session_uuid);
+  assert.notEqual(rows[0].session_uuid, rows[1].session_uuid);
+  assert.ok(rows.every(row => row.client_type === 'codex-desktop'));
 });

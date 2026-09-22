@@ -14,11 +14,32 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const DASHBOARD_HTML_PATH = path.join(__dirname, 'dashboard.html');
 
+/**
+ * Classifies a request without relying on the process that started the proxy.
+ * This matters when Claude and Codex share one long-lived proxy daemon.
+ */
+export function detectClientType(url = '/', headers = {}, fallback = 'desktop') {
+  const explicit = headers['x-claude-guard-client'] || headers['x-codex-client'] || headers['x-client-type'];
+  if (explicit) return String(explicit).toLowerCase();
+
+  const normalizedUrl = String(url).toLowerCase();
+  const userAgent = String(headers['user-agent'] || '').toLowerCase();
+  if (/chatgpt|codex[-_ ]?desktop/.test(userAgent) ||
+      /codex[-_ ]?desktop|chatgpt/i.test(String(headers.originator || ''))) return 'codex-desktop';
+  const isCodex = normalizedUrl.includes('/backend-api/') ||
+    normalizedUrl.includes('/chat/completions') ||
+    normalizedUrl.includes('/responses') ||
+    userAgent.includes('codex') ||
+    userAgent.includes('chatgpt');
+  if (!isCodex) return fallback;
+  return String(fallback).toLowerCase().includes('codex') ? fallback : 'codex-cli';
+}
+
 export function createProxyServer(userConfig = {}) {
   const config = { ...loadConfig(), ...userConfig };
   const optimizer = new TokenOptimizer(config);
   const db = new GuardDB(userConfig.dbPath || null);
-  const clientType = process.env.CLAUDE_GUARD_CLIENT || userConfig.clientType || 'desktop';
+  const clientType = userConfig.clientType || process.env.CLAUDE_GUARD_CLIENT || 'desktop';
   let currentProject = userConfig.projectName || process.env.CLAUDE_GUARD_PROJECT || 'Geral';
   let currentProjectPath = userConfig.projectPath || process.env.CLAUDE_GUARD_PROJECT_PATH || null;
   const sseClients = new Set();
@@ -39,35 +60,46 @@ export function createProxyServer(userConfig = {}) {
   const defaultSessionUuid = db.createSession(clientType, currentProject, currentProjectPath);
   sessionUuids.set(clientType, defaultSessionUuid);
 
-  function getRequestClientType(url) {
-    if (url.includes('/backend-api/') || url.includes('/chat/completions') || url.includes('/responses')) {
-      return clientType.includes('codex') ? clientType : 'codex-cli';
-    }
-    return clientType;
+  function getRequestClientType(url, req = null) {
+    // A request may come from a shared proxy process. Prefer the explicit
+    // per-client header so Claude Desktop and Codex Desktop do not get merged
+    // into the process owner's session.
+    return detectClientType(url, req?.headers || {}, clientType);
   }
 
-  function getSessionUuid(requestClientType) {
-    if (!sessionUuids.has(requestClientType)) {
-      sessionUuids.set(requestClientType, db.createSession(requestClientType, currentProject, currentProjectPath));
+  const sessionProjects = new Map();
+
+  function getSessionUuid(requestClientType, headers = {}) {
+    const sourceId = headers.session_id || headers['x-codex-session-id'] || headers['x-session-id'];
+    const key = sourceId ? JSON.stringify([requestClientType, sourceId]) : requestClientType;
+    if (!sessionUuids.has(key)) {
+      sessionUuids.set(key, db.createSession(requestClientType, currentProject, currentProjectPath));
     }
-    return sessionUuids.get(requestClientType);
+    return sessionUuids.get(key);
   }
 
   const server = http.createServer((req, res) => {
     const url = req.url || '/';
     const method = req.method || 'GET';
-    const requestClientType = getRequestClientType(url);
-    const requestSessionUuid = getSessionUuid(requestClientType);
+    const requestClientType = getRequestClientType(url, req);
+    const requestSessionUuid = getSessionUuid(requestClientType, req.headers);
+    let { projectName: currentProject, projectPath: currentProjectPath } =
+      sessionProjects.get(requestSessionUuid) || {
+        projectName: userConfig.projectName || process.env.CLAUDE_GUARD_PROJECT || 'Geral',
+        projectPath: userConfig.projectPath || process.env.CLAUDE_GUARD_PROJECT_PATH || null
+      };
 
     const pathname = url.split('?')[0];
 
     // Register desktop clients as soon as their launcher opens, before the first LLM request.
     if (method === 'POST' && pathname === '/claude-guard/register') {
-      const registeredClientType = req.headers['x-claude-guard-client'] || 'desktop';
+      const registeredClientType = req.headers['x-claude-guard-client'] ||
+        req.headers['x-codex-client'] || 'desktop';
       const registeredProject = req.headers['x-claude-guard-project'] || currentProject;
       const registeredProjectPath = req.headers['x-claude-guard-project-path'] || currentProjectPath;
       const registeredSessionUuid = db.createSession(registeredClientType, registeredProject, registeredProjectPath);
       sessionUuids.set(registeredClientType, registeredSessionUuid);
+      sessionProjects.set(registeredSessionUuid, { projectName: registeredProject, projectPath: registeredProjectPath });
       res.writeHead(201, { 'content-type': 'application/json' });
       res.end(JSON.stringify({ registered: true, clientType: registeredClientType }));
       return;
@@ -247,8 +279,14 @@ export function createProxyServer(userConfig = {}) {
 
     // Clone headers
     const forwardedHeaders = { ...req.headers };
-    forwardedHeaders['host'] = targetHost;
+    forwardedHeaders['host'] = targetPort && ![80, 443].includes(Number(targetPort))
+      ? `${targetHost}:${targetPort}`
+      : targetHost;
     delete forwardedHeaders['x-target-host'];
+    // These are local routing hints and must never be sent to a provider.
+    delete forwardedHeaders['x-claude-guard-client'];
+    delete forwardedHeaders['x-codex-client'];
+    delete forwardedHeaders['x-client-type'];
 
     // Optimize LLM messages (Anthropic /v1/messages or OpenAI /v1/chat/completions, /v1/responses)
     const isOptimizable =
@@ -279,6 +317,7 @@ export function createProxyServer(userConfig = {}) {
             currentProject = detected.projectName;
             currentProjectPath = detected.projectPath;
             db.updateSessionProject(requestSessionUuid, currentProject, currentProjectPath);
+            sessionProjects.set(requestSessionUuid, detected);
           }
 
           const formatHint = (url.includes('/chat/completions') || url.includes('/responses') || url.includes('/backend-api/')) ? 'openai' : 'anthropic';
