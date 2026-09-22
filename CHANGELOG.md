@@ -4,6 +4,12 @@
 
 - Renomeado o pacote e comando principal para `claude-codex-guard`, incluindo arquivos, configuração, variáveis de ambiente, endpoints, headers, provider, serviço e identidade visual.
 - Mantido `codex-guard` como atalho dedicado ao Codex.
+- Corrigido o roteamento de `/v1/models` para requisições Anthropic sob OAuth/Bearer token (Claude Code e Claude Desktop), impedindo que fossem incorretamente direcionadas para a API da OpenAI.
+- Implementado tratamento local de preflight CORS (`OPTIONS`) com HTTP 204 e cabeçalhos `Access-Control-*`, eliminando bloqueios por navegadores e webviews Electron.
+- Sanitização de cabeçalhos locais `Origin` e `Referer` antes do envio upstream para prevenir erros `Disallowed CORS origin` do Cloudflare.
+- Corrigido encerramento prematuro de requisições GET upstream (`res.on('close')` em vez de `req.on('close')`).
+- Preservação completa das configurações de plugins, marketplaces e ferramentas locais (`node_repl`) no `config.toml` do Codex Desktop.
+
 
 ## [1.3.4] - 2026-09-22
 

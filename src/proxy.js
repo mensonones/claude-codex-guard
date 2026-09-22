@@ -35,6 +35,111 @@ export function detectClientType(url = '/', headers = {}, fallback = 'desktop') 
   return String(fallback).toLowerCase().includes('codex') ? fallback : 'codex-cli';
 }
 
+/**
+ * Determines the target host, port, and path for an incoming request.
+ * Accurately differentiates Anthropic vs OpenAI vs Codex upstreams.
+ */
+export function detectTarget(url = '/', req = null, config = {}, requestClientType = 'desktop') {
+  const headers = req?.headers || {};
+  let targetHost = config.targetHost || 'api.anthropic.com';
+  let targetPort = config.targetPort || 443;
+  let targetPath = url;
+
+  if (url.startsWith('http://') || url.startsWith('https://')) {
+    try {
+      const parsed = new URL(url);
+      targetHost = parsed.hostname;
+      targetPort = parsed.port ? parseInt(parsed.port, 10) : (parsed.protocol === 'https:' ? 443 : 80);
+      targetPath = parsed.pathname + parsed.search;
+      return { targetHost, targetPort, targetPath };
+    } catch {}
+  }
+
+  if (headers['x-target-host']) {
+    targetHost = headers['x-target-host'];
+    targetPort = headers['x-target-port'] ? parseInt(headers['x-target-port'], 10) : 443;
+    return { targetHost, targetPort, targetPath };
+  }
+
+  const normalizedUrl = String(url).toLowerCase();
+  const userAgent = String(headers['user-agent'] || '').toLowerCase();
+  const clientType = String(requestClientType || '').toLowerCase();
+  const authHeader = String(headers['authorization'] || '');
+
+  // Codex Backend API is always routed to codexTargetHost (chatgpt.com)
+  if (normalizedUrl.includes('/backend-api/')) {
+    return {
+      targetHost: config.codexTargetHost || 'chatgpt.com',
+      targetPort: config.codexTargetPort || 443,
+      targetPath
+    };
+  }
+
+  // Explicit OpenAI endpoints
+  if (normalizedUrl.includes('/chat/completions') || normalizedUrl.includes('/responses')) {
+    return {
+      targetHost: config.openaiTargetHost || 'api.openai.com',
+      targetPort: config.openaiTargetPort || 443,
+      targetPath
+    };
+  }
+
+  // Anthropic indicators
+  const isAnthropic =
+    Boolean(headers['anthropic-version']) ||
+    Boolean(headers['anthropic-beta']) ||
+    Boolean(headers['x-api-key']) ||
+    authHeader.startsWith('Bearer sk-ant-') ||
+    userAgent.includes('anthropic') ||
+    userAgent.includes('claude') ||
+    clientType.includes('claude') ||
+    clientType === 'desktop' ||
+    normalizedUrl.includes('/messages') ||
+    normalizedUrl.includes('/complete') ||
+    normalizedUrl === '/api/hello';
+
+  // OpenAI / Codex indicators
+  const isOpenAI =
+    Boolean(headers['openai-organization']) ||
+    Boolean(headers['openai-project']) ||
+    Boolean(headers['x-codex-client']) ||
+    clientType.includes('codex') ||
+    userAgent.includes('openai') ||
+    userAgent.includes('codex') ||
+    userAgent.includes('chatgpt') ||
+    authHeader.startsWith('Bearer sk-proj-');
+
+  if (normalizedUrl.startsWith('/v1/models')) {
+    if (isOpenAI && !isAnthropic) {
+      return {
+        targetHost: config.openaiTargetHost || 'api.openai.com',
+        targetPort: config.openaiTargetPort || 443,
+        targetPath
+      };
+    }
+    // Default to Anthropic for /v1/models (supports Claude Code and Claude Desktop OAuth)
+    return {
+      targetHost: config.targetHost || 'api.anthropic.com',
+      targetPort: config.targetPort || 443,
+      targetPath
+    };
+  }
+
+  if (isOpenAI) {
+    return {
+      targetHost: config.openaiTargetHost || 'api.openai.com',
+      targetPort: config.openaiTargetPort || 443,
+      targetPath
+    };
+  }
+
+  return {
+    targetHost: config.targetHost || 'api.anthropic.com',
+    targetPort: config.targetPort || 443,
+    targetPath
+  };
+}
+
 export function createProxyServer(userConfig = {}) {
   const config = { ...loadConfig(), ...userConfig };
   const optimizer = new TokenOptimizer(config);
@@ -102,6 +207,20 @@ export function createProxyServer(userConfig = {}) {
       sessionProjects.set(registeredSessionUuid, { projectName: registeredProject, projectPath: registeredProjectPath });
       res.writeHead(201, { 'content-type': 'application/json' });
       res.end(JSON.stringify({ registered: true, clientType: registeredClientType }));
+      return;
+    }
+
+    // Handle CORS preflight OPTIONS requests locally
+    if (method === 'OPTIONS') {
+      res.writeHead(204, {
+        'Access-Control-Allow-Origin': req.headers.origin || '*',
+        'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS, HEAD, PATCH',
+        'Access-Control-Allow-Headers': req.headers['access-control-request-headers'] || '*',
+        'Access-Control-Allow-Credentials': 'true',
+        'Access-Control-Max-Age': '86400',
+        'Content-Length': '0'
+      });
+      res.end();
       return;
     }
 
@@ -244,38 +363,7 @@ export function createProxyServer(userConfig = {}) {
     }
 
     // Determine upstream target (Anthropic vs OpenAI vs custom)
-    let targetHost = config.targetHost;
-    let targetPort = config.targetPort;
-    let targetPath = url;
-
-    // Check if absolute URL (e.g. from standard HTTP_PROXY client)
-    if (url.startsWith('http://') || url.startsWith('https://')) {
-      try {
-        const parsed = new URL(url);
-        targetHost = parsed.hostname;
-        targetPort = parsed.port ? parseInt(parsed.port, 10) : (parsed.protocol === 'https:' ? 443 : 80);
-        targetPath = parsed.pathname + parsed.search;
-      } catch {}
-    } else {
-      // Relative URL: detect if OpenAI/Codex vs Anthropic
-      const isOpenAIEndpoint =
-        url.includes('/chat/completions') ||
-        url.includes('/responses') ||
-        url.includes('/backend-api/') ||
-        (url.startsWith('/v1/models') && !req.headers['x-api-key']);
-
-      if (isOpenAIEndpoint) {
-        if (url.includes('/backend-api/')) {
-          targetHost = config.codexTargetHost;
-          targetPort = config.codexTargetPort;
-        } else {
-          targetHost = config.openaiTargetHost;
-          targetPort = config.openaiTargetPort;
-        }
-      } else if (req.headers['x-target-host']) {
-        targetHost = req.headers['x-target-host'];
-      }
-    }
+    const { targetHost, targetPort, targetPath } = detectTarget(url, req, config, requestClientType);
 
     // Clone headers
     const forwardedHeaders = { ...req.headers };
@@ -283,10 +371,28 @@ export function createProxyServer(userConfig = {}) {
       ? `${targetHost}:${targetPort}`
       : targetHost;
     delete forwardedHeaders['x-target-host'];
+    delete forwardedHeaders['x-target-port'];
     // These are local routing hints and must never be sent to a provider.
     delete forwardedHeaders['x-claude-codex-guard-client'];
     delete forwardedHeaders['x-codex-client'];
     delete forwardedHeaders['x-client-type'];
+
+    // Strip local origins to prevent upstream Cloudflare from rejecting with "Disallowed CORS origin"
+    if (forwardedHeaders['origin'] && /localhost|127\.0\.0\.1|vscode-file|file:\/\//.test(forwardedHeaders['origin'])) {
+      delete forwardedHeaders['origin'];
+    }
+    if (forwardedHeaders['referer'] && /localhost|127\.0\.0\.1/.test(forwardedHeaders['referer'])) {
+      delete forwardedHeaders['referer'];
+    }
+
+    function prepareResponseHeaders(upstreamHeaders) {
+      const respHeaders = { ...upstreamHeaders };
+      if (req.headers.origin) {
+        respHeaders['access-control-allow-origin'] = req.headers.origin;
+        respHeaders['access-control-allow-credentials'] = 'true';
+      }
+      return respHeaders;
+    }
 
     // Optimize LLM messages (Anthropic /v1/messages or OpenAI /v1/chat/completions, /v1/responses)
     const isOptimizable =
@@ -391,8 +497,12 @@ export function createProxyServer(userConfig = {}) {
         };
 
         const clientReq = (targetPort === 443 ? https : http).request(targetOptions, targetRes => {
-          res.writeHead(targetRes.statusCode || 200, targetRes.headers);
+          res.writeHead(targetRes.statusCode || 200, prepareResponseHeaders(targetRes.headers));
           targetRes.pipe(res);
+        });
+
+        res.on('close', () => {
+          if (!res.writableFinished && !clientReq.destroyed) clientReq.destroy();
         });
 
         clientReq.on('error', err => {
@@ -416,8 +526,12 @@ export function createProxyServer(userConfig = {}) {
       };
 
       const clientReq = (targetPort === 443 ? https : http).request(targetOptions, targetRes => {
-        res.writeHead(targetRes.statusCode || 200, targetRes.headers);
+        res.writeHead(targetRes.statusCode || 200, prepareResponseHeaders(targetRes.headers));
         targetRes.pipe(res);
+      });
+
+      res.on('close', () => {
+        if (!res.writableFinished && !clientReq.destroyed) clientReq.destroy();
       });
 
       clientReq.on('error', err => {

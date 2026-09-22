@@ -78,6 +78,62 @@ function codexGuardConfigArgs(baseUrl, args) {
   return overrides;
 }
 
+function syncGuardCodexHome(port) {
+  const home = process.env.HOME || '.';
+  const codexDir = path.resolve(home, '.codex');
+  const guardCodexHome = path.resolve(home, '.config/claude-codex-guard/codex-home');
+  fs.mkdirSync(guardCodexHome, { recursive: true });
+
+  if (fs.existsSync(codexDir)) {
+    try {
+      const items = fs.readdirSync(codexDir);
+      for (const item of items) {
+        if (item === '.' || item === '..' || item === 'config.toml') continue;
+        const srcItem = path.join(codexDir, item);
+        const destItem = path.join(guardCodexHome, item);
+        if (!fs.existsSync(destItem) && !fs.lstatSync(destItem, { throwIfNoEntry: false })) {
+          try {
+            fs.symlinkSync(srcItem, destItem);
+          } catch {}
+        } else if (item.endsWith('.sqlite') || item.includes('.sqlite-') || item === 'session_index.jsonl' || item.endsWith('.json')) {
+          try {
+            const stat = fs.lstatSync(destItem, { throwIfNoEntry: false });
+            if (stat && !stat.isSymbolicLink()) {
+              fs.renameSync(destItem, `${destItem}.bak`);
+              fs.symlinkSync(srcItem, destItem);
+            }
+          } catch {}
+        }
+      }
+    } catch {}
+  }
+
+  // Merge config.toml
+  const origConfigPath = path.join(codexDir, 'config.toml');
+  const destConfigPath = path.join(guardCodexHome, 'config.toml');
+  let cleanLines = [];
+  if (fs.existsSync(origConfigPath)) {
+    try {
+      const orig = fs.readFileSync(origConfigPath, 'utf8');
+      const lines = orig.split('\n').filter(l => !l.trim().startsWith('model_provider =') && !l.trim().startsWith('model_provider='));
+      let inBlock = false;
+      for (const l of lines) {
+        if (l.trim() === '[model_providers.claude-codex-guard]') { inBlock = true; continue; }
+        if (inBlock) {
+          if (l.trim().startsWith('[') && l.trim().endsWith(']')) inBlock = false;
+          else continue;
+        }
+        cleanLines.push(l);
+      }
+    } catch {}
+  }
+
+  const guardBlock = `model_provider = "claude-codex-guard"\n\n[model_providers.claude-codex-guard]\nname = "Claude Codex Guard"\nbase_url = "http://127.0.0.1:${port}/backend-api/codex"\nwire_api = "responses"\nrequires_openai_auth = true\nsupports_websockets = false\nhttp_headers = { "x-claude-codex-guard-client" = "codex-desktop" }\n`;
+
+  const finalToml = guardBlock + '\n' + cleanLines.join('\n').trim() + '\n';
+  fs.writeFileSync(destConfigPath, finalToml);
+}
+
 function detectEnvironment() {
   const home = process.env.HOME || '.';
   const candidates = desktopCandidates(home);
@@ -632,26 +688,9 @@ export CLAUDE_CODEX_GUARD_CLIENT="codex-desktop"
 export DO_NOT_TRACK="1"
 export DISABLE_TELEMETRY="1"
 
-# O Codex embutido pode ignorar OPENAI_BASE_URL quando já existe um provider
-# selecionado. Use um CODEX_HOME isolado, preservando a autenticação existente,
-# para forçar o provider HTTP local sem alterar ~/.codex/config.toml.
-GUARD_CODEX_HOME="$HOME/.config/claude-codex-guard/codex-home"
-mkdir -p "$GUARD_CODEX_HOME"
-if [ -f "$HOME/.codex/auth.json" ] && [ ! -e "$GUARD_CODEX_HOME/auth.json" ]; then
-  ln -s "$HOME/.codex/auth.json" "$GUARD_CODEX_HOME/auth.json" 2>/dev/null || true
-fi
-cat > "$GUARD_CODEX_HOME/config.toml" <<EOF
-model_provider = "claude-codex-guard"
-
-[model_providers.claude-codex-guard]
-name = "Claude Codex Guard"
-base_url = "http://127.0.0.1:${config.port}/backend-api/codex"
-wire_api = "responses"
-requires_openai_auth = true
-supports_websockets = false
-http_headers = { "x-claude-codex-guard-client" = "codex-desktop" }
-EOF
-export CODEX_HOME="$GUARD_CODEX_HOME"
+# Sincroniza configuracao e sessoes do Codex Desktop com Claude-Codex-Guard
+"$NODE_BIN" "$GUARD_BIN" sync-codex-desktop >/dev/null 2>&1 || true
+export CODEX_HOME="$HOME/.config/claude-codex-guard/codex-home"
 
 # Registra a sessão na dashboard mesmo antes do primeiro prompt.
 /usr/bin/curl -sS -X POST "http://127.0.0.1:${config.port}/claude-codex-guard/register" \\
@@ -661,6 +700,9 @@ exec "${realBin}" "$@"
 `;
 
   fs.writeFileSync(chatgptLauncherPath, script, { mode: 0o755 });
+
+  // Sync codex home immediately
+  syncGuardCodexHome(config.port);
 
   const desktopEntry = `[Desktop Entry]
 Name=ChatGPT (Codex-Guard)
@@ -683,6 +725,15 @@ MimeType=x-scheme-handler/codex;x-scheme-handler/http;x-scheme-handler/https;tex
   console.log(`  • O proxy e o SQLite gravarão os dados automaticamente.`);
   console.log(`  • Os shims (cat, git, find, npm) conterão desperdícios de contexto.`);
   console.log(`  • Relatórios disponíveis com: \x1b[1mclaude-codex-guard report\x1b[0m\n`);
+  process.exit(0);
+}
+
+// ----------------------------------------------------
+// COMMAND: sync-codex-desktop
+// ----------------------------------------------------
+else if (args[0] === 'sync-codex-desktop') {
+  const config = loadConfig();
+  syncGuardCodexHome(config.port);
   process.exit(0);
 }
 

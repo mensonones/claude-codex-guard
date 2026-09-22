@@ -4,7 +4,7 @@ import http from 'node:http';
 import { TokenOptimizer } from '../src/optimizer.js';
 import { defaultConfig } from '../src/config.js';
 import { detectProjectFromPayload } from '../src/projectDetector.js';
-import { createProxyServer, detectClientType } from '../src/proxy.js';
+import { createProxyServer, detectClientType, detectTarget } from '../src/proxy.js';
 
 test('detectClientType keeps shared proxy sessions agnostic across clients', () => {
   assert.equal(detectClientType('/v1/messages', {}, 'desktop'), 'desktop');
@@ -401,3 +401,71 @@ test('Codex Desktop requests keep conversation sessions and projects separate', 
   assert.notEqual(rows[0].session_uuid, rows[1].session_uuid);
   assert.ok(rows.every(row => row.client_type === 'codex-desktop'));
 });
+
+test('detectTarget accurately routes Anthropic OAuth /v1/models and OpenAI endpoints', () => {
+  const config = {
+    targetHost: 'api.anthropic.com',
+    targetPort: 443,
+    openaiTargetHost: 'api.openai.com',
+    openaiTargetPort: 443,
+    codexTargetHost: 'chatgpt.com',
+    codexTargetPort: 443
+  };
+
+  // 1. Anthropic Claude Code / Claude Desktop requesting /v1/models without x-api-key (OAuth Bearer token)
+  const claudeModels = detectTarget('/v1/models', { headers: { 'anthropic-version': '2023-06-01', authorization: 'Bearer token123' } }, config, 'desktop');
+  assert.equal(claudeModels.targetHost, 'api.anthropic.com');
+
+  // 2. Anthropic default for /v1/models even without headers
+  const defaultModels = detectTarget('/v1/models', { headers: {} }, config, 'desktop');
+  assert.equal(defaultModels.targetHost, 'api.anthropic.com');
+
+  // 3. OpenAI / Codex requesting /v1/models
+  const openaiModels = detectTarget('/v1/models', { headers: { 'x-claude-codex-guard-client': 'codex-desktop', 'user-agent': 'Codex/1.0' } }, config, 'codex-desktop');
+  assert.equal(openaiModels.targetHost, 'api.openai.com');
+
+  // 4. Codex backend-api
+  const codexBackend = detectTarget('/backend-api/codex/responses', { headers: {} }, config, 'codex-desktop');
+  assert.equal(codexBackend.targetHost, 'chatgpt.com');
+
+  // 5. OpenAI chat completions
+  const openaiChat = detectTarget('/v1/chat/completions', { headers: {} }, config, 'cli');
+  assert.equal(openaiChat.targetHost, 'api.openai.com');
+
+  // 6. Anthropic messages
+  const anthropicMessages = detectTarget('/v1/messages', { headers: {} }, config, 'desktop');
+  assert.equal(anthropicMessages.targetHost, 'api.anthropic.com');
+});
+
+test('Proxy handles OPTIONS CORS preflight locally with 204 No Content', async () => {
+  const { server, db } = createProxyServer({ port: 0, dbPath: ':memory:' });
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  const port = server.address().port;
+
+  try {
+    const res = await new Promise((resolve, reject) => {
+      const req = http.request({
+        hostname: '127.0.0.1',
+        port,
+        path: '/v1/messages',
+        method: 'OPTIONS',
+        headers: {
+          'Origin': 'http://localhost:3000',
+          'Access-Control-Request-Method': 'POST'
+        }
+      }, response => {
+        resolve(response);
+      });
+      req.on('error', reject);
+      req.end();
+    });
+
+    assert.equal(res.statusCode, 204);
+    assert.equal(res.headers['access-control-allow-origin'], 'http://localhost:3000');
+    assert.ok(res.headers['access-control-allow-methods'].includes('POST'));
+  } finally {
+    server.close();
+    db.close();
+  }
+});
+
