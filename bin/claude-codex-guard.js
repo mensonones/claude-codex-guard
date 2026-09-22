@@ -805,10 +805,17 @@ else if (args[0] === 'proxy') {
       try { trayProc.kill(); } catch {}
     }
     console.table(optimizer.getSummary());
+    if (typeof server.closeAllConnections === 'function') {
+      server.closeAllConnections();
+    }
     server.close(() => {
       db.close();
       process.exit(0);
     });
+    setTimeout(() => {
+      try { db.close(); } catch {}
+      process.exit(0);
+    }, 1500).unref();
   };
   process.on('SIGINT', cleanup);
   process.on('SIGTERM', cleanup);
