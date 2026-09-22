@@ -325,13 +325,13 @@ export class GuardDB {
         COALESCE(s.client_type, 'unknown') as client_type,
         COUNT(r.id) as request_count,
         COALESCE(SUM(r.saved_tokens), 0) as tokens_saved
-      FROM requests r
-      LEFT JOIN sessions s ON r.session_uuid = s.session_uuid
+      FROM sessions s
+      LEFT JOIN requests r ON r.session_uuid = s.session_uuid
     `;
 
     const params = [];
     if (filterProject) {
-      sql += ` WHERE LOWER(r.project_name) = LOWER(?)`;
+      sql += ` WHERE LOWER(COALESCE(r.project_name, s.project_name)) = LOWER(?)`;
       params.push(filterProject);
     }
 

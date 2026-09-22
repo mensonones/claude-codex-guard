@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.3.3 — 2026-09-22
+
+- Sessões do Codex Desktop agora são registradas na abertura do launcher, antes do primeiro prompt.
+- A dashboard passou a exibir agentes sem requisições, evitando o estado vazio durante a inicialização.
+- Adicionado endpoint local de registro de sessão e teste de regressão para o fluxo Codex Desktop.
+
 ## 1.3.2 — 2026-09-22
 
 - Corrigida a identificação de sessões Codex quando o proxy já está compartilhado com Claude Desktop.

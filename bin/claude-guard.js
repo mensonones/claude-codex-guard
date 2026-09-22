@@ -583,6 +583,10 @@ export CLAUDE_GUARD_CLIENT="codex-desktop"
 export DO_NOT_TRACK="1"
 export DISABLE_TELEMETRY="1"
 
+# Registra a sessão na dashboard mesmo antes do primeiro prompt.
+/usr/bin/curl -sS -X POST "http://127.0.0.1:${config.port}/claude-guard/register" \\
+  -H "x-claude-guard-client: codex-desktop" >/dev/null 2>&1 || true
+
 exec "${realBin}" "$@"
 `;
 

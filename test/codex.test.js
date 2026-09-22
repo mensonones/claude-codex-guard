@@ -329,3 +329,33 @@ test('Dashboard HTML includes Claude and Codex badges and agent section', async 
   assert.ok(html.includes('id="agentList"'));
   assert.ok(html.includes('Por agente'));
 });
+
+test('Proxy registers a Codex Desktop session before its first request', async () => {
+  const { server, db } = createProxyServer({ port: 0, dbPath: ':memory:' });
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  const proxyPort = server.address().port;
+
+  try {
+    const response = await new Promise((resolve, reject) => {
+      const req = http.request({
+        hostname: '127.0.0.1',
+        port: proxyPort,
+        path: '/claude-guard/register',
+        method: 'POST',
+        headers: { 'x-claude-guard-client': 'codex-desktop' }
+      }, res => {
+        let body = '';
+        res.on('data', chunk => body += chunk);
+        res.on('end', () => resolve({ statusCode: res.statusCode, body }));
+      });
+      req.on('error', reject);
+      req.end();
+    });
+
+    assert.equal(response.statusCode, 201);
+    assert.equal(db.getClientStats().find(client => client.client_type === 'codex-desktop').request_count, 0);
+  } finally {
+    server.close();
+    db.close();
+  }
+});

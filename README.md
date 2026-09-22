@@ -4,7 +4,7 @@
 
 Desenvolvido em **Node.js** puro (sem dependências externas), o **Claude-Guard** atua ativamente para reduzir drasticamente o consumo de tokens e cortar requisições repetitivas ou loops agênticos descontrolados tanto no **Claude Code / Desktop** quanto no **OpenAI Codex CLI / Desktop**.
 
-Versão atual: **1.3.2**.
+Versão atual: **1.3.3**.
 
 ---
 
@@ -74,6 +74,8 @@ claude-guard codex
 O wrapper do Codex aponta `OPENAI_BASE_URL` para o proxy local. Assim, as chamadas JSON chegam ao otimizador, ao SQLite e ao feed SSE da dashboard. O wrapper não usa `HTTPS_PROXY` nesse fluxo, pois isso criaria um túnel CONNECT criptografado impossível de inspecionar.
 
 Mesmo quando o Codex reutiliza um proxy já aberto pelo Claude Desktop, as requisições Codex são separadas por cliente e aparecem no resumo de agentes da dashboard.
+
+O launcher do ChatGPT/Codex Desktop também registra a sessão na abertura, então o agente aparece na dashboard antes do primeiro prompt.
 
 ### 3. Integração Automática com Aplicativos Desktop
 

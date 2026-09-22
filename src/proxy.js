@@ -61,6 +61,18 @@ export function createProxyServer(userConfig = {}) {
 
     const pathname = url.split('?')[0];
 
+    // Register desktop clients as soon as their launcher opens, before the first LLM request.
+    if (method === 'POST' && pathname === '/claude-guard/register') {
+      const registeredClientType = req.headers['x-claude-guard-client'] || 'desktop';
+      const registeredProject = req.headers['x-claude-guard-project'] || currentProject;
+      const registeredProjectPath = req.headers['x-claude-guard-project-path'] || currentProjectPath;
+      const registeredSessionUuid = db.createSession(registeredClientType, registeredProject, registeredProjectPath);
+      sessionUuids.set(registeredClientType, registeredSessionUuid);
+      res.writeHead(201, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ registered: true, clientType: registeredClientType }));
+      return;
+    }
+
     // Serve real-time Web Dashboard
     if ((method === 'GET' || method === 'HEAD') && (pathname === '/' || pathname === '/dashboard')) {
       try {
