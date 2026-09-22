@@ -4,7 +4,6 @@
 
 - Renomeado o pacote e comando principal para `claude-codex-guard`, incluindo arquivos, configuração, variáveis de ambiente, endpoints, headers, provider, serviço e identidade visual.
 - Mantido `codex-guard` como atalho dedicado ao Codex.
-- Documentada a migração manual dos dados e integrações da instalação anterior.
 
 ## [1.3.4] - 2026-09-22
 

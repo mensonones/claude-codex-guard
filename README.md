@@ -32,36 +32,6 @@ O **Claude-Codex-Guard** atua em duas frentes complementares:
 
 ## Como Usar
 
-### Migração do nome anterior
-
-O projeto e o comando principal agora se chamam `claude-codex-guard`. O comando
-`codex-guard` continua sendo o atalho dedicado ao Codex.
-
-Para migrar uma instalação de `claude-guard`:
-
-1. Feche os clientes desktop e encerre o proxy e a bandeja antigos. Se usava
-   autostart, desative `claude-guard.service` e remova a entrada antiga
-   `~/.config/autostart/claude-guard.desktop` antes de habilitar o novo serviço.
-2. Com os processos parados, faça backup e copie o conteúdo de
-   `~/.config/claude-guard/` para `~/.config/claude-codex-guard/`, preservando
-   arquivos ocultos e links. Isso inclui `history.db` e `codex-home/`.
-   Se o destino já tiver dados, reconcilie-os antes de copiar; não sobrescreva
-   históricos ou configurações existentes.
-3. Renomeie `claude-guard.config.json` para `claude-codex-guard.config.json`
-   e atualize variáveis `CLAUDE_GUARD_*` para `CLAUDE_CODEX_GUARD_*` no seu ambiente.
-4. Remova o pacote global antigo com `npm uninstall -g claude-guard` e, na
-   pasta deste repositório, execute `node bin/claude-codex-guard.js install`.
-   A instalação atualiza o caminho de origem e recria as integrações desktop
-   detectadas. Para clientes não detectados, execute os comandos `setup-desktop`
-   ou `setup-codex-desktop` conforme necessário.
-5. Se usava autostart, execute `claude-codex-guard autostart enable`.
-   Confira a instalação com `claude-codex-guard status` e o histórico com
-   `claude-codex-guard report`.
-
-Integrações próprias devem usar `/claude-codex-guard/*`, headers
-`x-claude-codex-guard-*` e o provider `claude-codex-guard`.
-A migração dos dados locais não é automática.
-
 ### Instalação global e atualização automática
 
 A instalação identifica os clientes disponíveis no ambiente — Claude CLI/Code, Codex CLI, Claude Desktop e ChatGPT/Codex Desktop — e registra a origem da instalação:
