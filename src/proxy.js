@@ -35,11 +35,29 @@ export function createProxyServer(userConfig = {}) {
     }
   }
 
-  const sessionUuid = db.createSession(clientType, currentProject, currentProjectPath);
+  const sessionUuids = new Map();
+  const defaultSessionUuid = db.createSession(clientType, currentProject, currentProjectPath);
+  sessionUuids.set(clientType, defaultSessionUuid);
+
+  function getRequestClientType(url) {
+    if (url.includes('/backend-api/') || url.includes('/chat/completions') || url.includes('/responses')) {
+      return clientType.includes('codex') ? clientType : 'codex-cli';
+    }
+    return clientType;
+  }
+
+  function getSessionUuid(requestClientType) {
+    if (!sessionUuids.has(requestClientType)) {
+      sessionUuids.set(requestClientType, db.createSession(requestClientType, currentProject, currentProjectPath));
+    }
+    return sessionUuids.get(requestClientType);
+  }
 
   const server = http.createServer((req, res) => {
     const url = req.url || '/';
     const method = req.method || 'GET';
+    const requestClientType = getRequestClientType(url);
+    const requestSessionUuid = getSessionUuid(requestClientType);
 
     const pathname = url.split('?')[0];
 
@@ -144,7 +162,7 @@ export function createProxyServer(userConfig = {}) {
         optimizer.stats.telemetryBlocked = (optimizer.stats.telemetryBlocked || 0) + 1;
 
         db.logTelemetryBlock({
-          sessionUuid,
+          sessionUuid: requestSessionUuid,
           projectName: currentProject,
           endpoint: url,
           method,
@@ -248,7 +266,7 @@ export function createProxyServer(userConfig = {}) {
           if (detected.projectName && detected.projectName !== 'Geral') {
             currentProject = detected.projectName;
             currentProjectPath = detected.projectPath;
-            db.updateSessionProject(sessionUuid, currentProject, currentProjectPath);
+            db.updateSessionProject(requestSessionUuid, currentProject, currentProjectPath);
           }
 
           const formatHint = (url.includes('/chat/completions') || url.includes('/responses') || url.includes('/backend-api/')) ? 'openai' : 'anthropic';
@@ -277,7 +295,7 @@ export function createProxyServer(userConfig = {}) {
           // Persist to SQLite with project association
           try {
             db.logRequest({
-              sessionUuid,
+              sessionUuid: requestSessionUuid,
               projectName: currentProject,
               model,
               originalChars: originalLen,
@@ -296,7 +314,7 @@ export function createProxyServer(userConfig = {}) {
           broadcastEvent('request', {
             type: 'request',
             project: currentProject,
-            clientType,
+            clientType: requestClientType,
             model,
             savedTokens: result.savedTokens,
             origChars: originalLen,

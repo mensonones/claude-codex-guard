@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.3.2 — 2026-09-22
+
+- Corrigida a identificação de sessões Codex quando o proxy já está compartilhado com Claude Desktop.
+- Requisições `/backend-api/`, Responses e Chat Completions agora são associadas ao cliente Codex por requisição.
+- Adicionado teste de regressão para garantir que as requisições Codex apareçam no resumo de clientes da dashboard.
+- Validada a captura real do Codex CLI com resposta `OK` e persistência no SQLite.
+
 ## 1.3.1 — 2026-09-22
 
 - Adicionado instalador global idempotente com `claude-guard install` e `claude-guard update`.

@@ -4,7 +4,7 @@
 
 Desenvolvido em **Node.js** puro (sem dependências externas), o **Claude-Guard** atua ativamente para reduzir drasticamente o consumo de tokens e cortar requisições repetitivas ou loops agênticos descontrolados tanto no **Claude Code / Desktop** quanto no **OpenAI Codex CLI / Desktop**.
 
-Versão atual: **1.3.1**.
+Versão atual: **1.3.2**.
 
 ---
 
@@ -15,7 +15,7 @@ Agentes de codificação autônomos trabalham em um *ReAct Loop*: para cada micr
 O **Claude-Guard** atua em duas frentes complementares:
 
 1. **Proxy Reverso Inteligente Multi-Provedor (`src/proxy.js`)**:
-   - **Compatível com Anthropic & OpenAI**: Roteamento dinâmico automático para `/v1/messages` (Claude) e `/v1/chat/completions` ou `/v1/responses` (Codex / OpenAI).
+   - **Compatível com Anthropic & OpenAI**: Roteamento dinâmico automático para `/v1/messages` (Claude) e `/v1/chat/completions`, `/v1/responses` ou `/backend-api/` (Codex / OpenAI).
    - **Poda Histórica de Contexto (`keepRecentToolTurns: 2`)**: Preserva os resultados de ferramentas recentes intactos, mas compacta saídas de rodadas anteriores (onde o agente já extraiu o que precisava). Reduz em até 70% o inchaço cumulativo de tokens.
    - **Truncamento Cirúrgico (`maxToolResultChars: 3500`)**: Se um comando produzir milhares de linhas, o proxy preserva o início e o fim do log com marcador explícito de corte, evitando faturar arquivos gigantes desnecessariamente.
    - **Circuit Breaker / Anti-Loop (`maxConsecutiveToolCalls: 12`)**: Se o agente entrar em um loop automático tentando rodar comandos repetidamente sem intervenção humana, o proxy injeta uma instrução forçando o agente a parar, reportar os achados e pedir confirmação ao usuário.
@@ -72,6 +72,8 @@ claude-guard codex
 ```
 
 O wrapper do Codex aponta `OPENAI_BASE_URL` para o proxy local. Assim, as chamadas JSON chegam ao otimizador, ao SQLite e ao feed SSE da dashboard. O wrapper não usa `HTTPS_PROXY` nesse fluxo, pois isso criaria um túnel CONNECT criptografado impossível de inspecionar.
+
+Mesmo quando o Codex reutiliza um proxy já aberto pelo Claude Desktop, as requisições Codex são separadas por cliente e aparecem no resumo de agentes da dashboard.
 
 ### 3. Integração Automática com Aplicativos Desktop
 

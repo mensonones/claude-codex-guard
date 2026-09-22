@@ -309,6 +309,8 @@ test('Proxy intercepts ChatGPT Codex backend API and routes it to the Codex upst
     assert.equal(response.statusCode, 200);
     assert.ok(upstreamReceivedBody.input[1].output.includes('claude-guard:'));
     assert.equal(db.getOverallStats('claude-guard').totalRequests, 1);
+    const codexClient = db.getClientStats().find(client => client.client_type.startsWith('codex'));
+    assert.equal(codexClient.request_count, 1);
   } finally {
     server.close();
     mockUpstream.close();
