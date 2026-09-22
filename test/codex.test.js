@@ -258,6 +258,64 @@ test('Proxy intercepts /v1/chat/completions, routes to OpenAI upstream, optimize
   }
 });
 
+test('Proxy intercepts ChatGPT Codex backend API and routes it to the Codex upstream', async () => {
+  let upstreamReceivedBody = null;
+  const mockUpstream = http.createServer((req, res) => {
+    let body = '';
+    req.on('data', chunk => body += chunk);
+    req.on('end', () => {
+      upstreamReceivedBody = JSON.parse(body);
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ ok: true }));
+    });
+  });
+
+  await new Promise(resolve => mockUpstream.listen(0, '127.0.0.1', resolve));
+  const upstreamPort = mockUpstream.address().port;
+  const { server, db } = createProxyServer({
+    port: 0,
+    codexTargetHost: '127.0.0.1',
+    codexTargetPort: upstreamPort,
+    maxToolResultChars: 300,
+    dbPath: ':memory:'
+  });
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  const proxyPort = server.address().port;
+
+  try {
+    const postData = JSON.stringify({
+      model: 'gpt-5.6-luna',
+      input: [
+        { role: 'user', content: 'run checks in /home/emerson-vieira/dev/opensource/claude-guard' },
+        { type: 'function_call_output', call_id: 'call_1', output: 'Z'.repeat(2000) }
+      ]
+    });
+    const response = await new Promise((resolve, reject) => {
+      const req = http.request({
+        hostname: '127.0.0.1',
+        port: proxyPort,
+        path: '/backend-api/codex/responses',
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(postData) }
+      }, res => {
+        let body = '';
+        res.on('data', chunk => body += chunk);
+        res.on('end', () => resolve({ statusCode: res.statusCode, body }));
+      });
+      req.on('error', reject);
+      req.end(postData);
+    });
+
+    assert.equal(response.statusCode, 200);
+    assert.ok(upstreamReceivedBody.input[1].output.includes('claude-guard:'));
+    assert.equal(db.getOverallStats('claude-guard').totalRequests, 1);
+  } finally {
+    server.close();
+    mockUpstream.close();
+    db.close();
+  }
+});
+
 test('Dashboard HTML includes Claude and Codex badges and agent section', async () => {
   const fs = await import('node:fs');
   const path = await import('node:path');

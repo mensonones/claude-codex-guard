@@ -59,6 +59,30 @@ export function detectProjectFromPayload(payload) {
     }
   }
 
+  // OpenAI Responses / ChatGPT backend uses `input` instead of `messages`.
+  // Scan only the first few items to keep project detection cheap on large payloads.
+  if (Array.isArray(payload.input)) {
+    const collectInputText = (value, depth = 0) => {
+      if (depth > 5 || value == null) return;
+      if (typeof value === 'string') {
+        textToScan += ' ' + value;
+        return;
+      }
+      if (Array.isArray(value)) {
+        for (const item of value.slice(0, 12)) collectInputText(item, depth + 1);
+        return;
+      }
+      if (typeof value === 'object') {
+        for (const [key, item] of Object.entries(value).slice(0, 20)) {
+          if (['output', 'content', 'text', 'arguments', 'path', 'file_path', 'command', 'cwd'].includes(key)) {
+            collectInputText(item, depth + 1);
+          }
+        }
+      }
+    };
+    collectInputText(payload.input);
+  }
+
   // Match explicit working directory / cwd pattern
   const cwdRegex = /(?:working directory|cwd|directory(?:\s+is)?):\s*([\/~][^\s\r\n\(\)\'\"]+)/i;
   const match = textToScan.match(cwdRegex);

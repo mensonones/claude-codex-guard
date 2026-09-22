@@ -203,8 +203,13 @@ export function createProxyServer(userConfig = {}) {
         (url.startsWith('/v1/models') && !req.headers['x-api-key']);
 
       if (isOpenAIEndpoint) {
-        targetHost = config.openaiTargetHost;
-        targetPort = config.openaiTargetPort;
+        if (url.includes('/backend-api/')) {
+          targetHost = config.codexTargetHost;
+          targetPort = config.codexTargetPort;
+        } else {
+          targetHost = config.openaiTargetHost;
+          targetPort = config.openaiTargetPort;
+        }
       } else if (req.headers['x-target-host']) {
         targetHost = req.headers['x-target-host'];
       }
@@ -220,7 +225,8 @@ export function createProxyServer(userConfig = {}) {
       method === 'POST' && (
         url.includes('/messages') ||
         url.includes('/chat/completions') ||
-        url.includes('/responses')
+        url.includes('/responses') ||
+        url.includes('/backend-api/')
       );
 
     if (isOptimizable) {
@@ -245,7 +251,7 @@ export function createProxyServer(userConfig = {}) {
             db.updateSessionProject(sessionUuid, currentProject, currentProjectPath);
           }
 
-          const formatHint = (url.includes('/chat/completions') || url.includes('/responses')) ? 'openai' : 'anthropic';
+          const formatHint = (url.includes('/chat/completions') || url.includes('/responses') || url.includes('/backend-api/')) ? 'openai' : 'anthropic';
           const result = optimizer.optimize(jsonPayload, formatHint);
 
           if (result.modified) {

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { spawn, execSync } from 'node:child_process';
+import { spawn, spawnSync, execSync, execFileSync } from 'node:child_process';
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -14,8 +14,153 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const projectRoot = path.resolve(__dirname, '..');
 const shimsDir = path.resolve(projectRoot, 'shims');
+const packageJson = JSON.parse(fs.readFileSync(path.join(projectRoot, 'package.json'), 'utf8'));
+const installStatePath = path.resolve(process.env.HOME || '.', '.config/claude-guard/installation.json');
 
 const args = process.argv.slice(2);
+
+function commandPath(command) {
+  try {
+    return execFileSync('which', [command], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim() || null;
+  } catch {
+    return null;
+  }
+}
+
+function detectEnvironment() {
+  const home = process.env.HOME || '.';
+  const claudeDesktop = [
+    path.resolve(home, '.local/bin/claude-desktop'),
+    '/usr/lib/claude-desktop/claude-desktop',
+    '/usr/bin/claude-desktop'
+  ].find(candidate => fs.existsSync(candidate)) || null;
+  const codexDesktop = [
+    '/usr/lib/chatgpt/codex-launcher',
+    '/usr/bin/chatgpt',
+    path.resolve(home, '.local/bin/chatgpt')
+  ].find(candidate => fs.existsSync(candidate)) || null;
+
+  return {
+    claudeCli: commandPath('claude'),
+    claudeCode: commandPath('claude-code'),
+    codexCli: commandPath('codex'),
+    claudeDesktop,
+    codexDesktop,
+    platform: process.platform,
+    node: process.execPath
+  };
+}
+
+function readInstallState() {
+  try {
+    return JSON.parse(fs.readFileSync(installStatePath, 'utf8'));
+  } catch {
+    return null;
+  }
+}
+
+function writeInstallState(sourcePath, environment) {
+  fs.mkdirSync(path.dirname(installStatePath), { recursive: true });
+  fs.writeFileSync(installStatePath, JSON.stringify({
+    sourcePath: path.resolve(sourcePath),
+    installedVersion: packageJson.version,
+    installedAt: new Date().toISOString(),
+    environment
+  }, null, 2) + '\n');
+}
+
+function printEnvironment(environment) {
+  const status = value => value ? `detectado (${value})` : 'não detectado';
+  console.log(`  Claude CLI       : ${status(environment.claudeCli)}`);
+  console.log(`  Claude Code      : ${status(environment.claudeCode)}`);
+  console.log(`  Codex CLI        : ${status(environment.codexCli)}`);
+  console.log(`  Claude Desktop   : ${status(environment.claudeDesktop)}`);
+  console.log(`  Codex/ChatGPT UI : ${status(environment.codexDesktop)}`);
+}
+
+function installGlobal(sourcePath, environment) {
+  const resolvedSource = path.resolve(sourcePath);
+  console.log(`\nAtualizando instalação global para Claude-Guard ${packageJson.version}...`);
+  const result = spawnSync('npm', ['install', '--global', '--no-fund', '--no-audit', resolvedSource], {
+    stdio: 'inherit'
+  });
+  if (result.status !== 0) {
+    console.error('\x1b[31mNão foi possível atualizar a instalação global.\x1b[0m');
+    process.exit(result.status || 1);
+  }
+
+  writeInstallState(resolvedSource, environment);
+  console.log(`\x1b[32m✔ Claude-Guard ${packageJson.version} instalado globalmente.\x1b[0m`);
+  printEnvironment(environment);
+  console.log(`  Estado salvo em: ${installStatePath}`);
+}
+
+function runSetupIfDetected(command, detectedPath) {
+  if (!detectedPath) return;
+  const result = spawnSync(process.execPath, [__filename, command], { stdio: 'inherit' });
+  if (result.status !== 0) {
+    console.warn(`\x1b[33mAviso: não foi possível configurar automaticamente ${command}.\x1b[0m`);
+  }
+}
+
+function handleInstallCommand() {
+  const environment = detectEnvironment();
+  installGlobal(projectRoot, environment);
+
+  if (!args.includes('--no-desktop')) {
+    if (environment.claudeDesktop && fs.existsSync(path.resolve(process.env.HOME || '.', '.local/bin/claude-desktop'))) {
+      runSetupIfDetected('setup-desktop', environment.claudeDesktop);
+    }
+    if (environment.codexDesktop) {
+      runSetupIfDetected('setup-codex-desktop', environment.codexDesktop);
+    }
+  }
+
+  console.log('\nUse `claude-guard status` para confirmar o proxy e `claude-guard dashboard` para abrir a dashboard.');
+  process.exit(0);
+}
+
+function handleUpdateCommand() {
+  const state = readInstallState();
+  const sourcePath = state?.sourcePath && fs.existsSync(path.join(state.sourcePath, 'package.json'))
+    ? state.sourcePath
+    : projectRoot;
+  installGlobal(sourcePath, detectEnvironment());
+  process.exit(0);
+}
+
+function maybeAutoUpdateGlobalInstall() {
+  if (process.env.CLAUDE_GUARD_AUTO_UPDATE_GUARD === '1' || args[0] === 'install' || args[0] === 'update') return;
+  const state = readInstallState();
+  if (!state?.sourcePath || path.resolve(state.sourcePath) === projectRoot || !fs.existsSync(path.join(state.sourcePath, 'package.json'))) return;
+
+  let sourceVersion = null;
+  try {
+    sourceVersion = JSON.parse(fs.readFileSync(path.join(state.sourcePath, 'package.json'), 'utf8')).version;
+  } catch {
+    return;
+  }
+  if (!sourceVersion || sourceVersion === state.installedVersion) return;
+
+  console.log(`\x1b[36mNova versão ${sourceVersion} detectada; atualizando a instalação global...\x1b[0m`);
+  const result = spawnSync('npm', ['install', '--global', '--no-fund', '--no-audit', state.sourcePath], { stdio: 'inherit' });
+  if (result.status !== 0) {
+    console.warn('\x1b[33mA atualização automática falhou; continuando com a versão atual.\x1b[0m');
+    return;
+  }
+  writeInstallState(state.sourcePath, detectEnvironment());
+  const nextBin = path.join(state.sourcePath, 'bin/claude-guard.js');
+  const rerun = spawnSync(process.execPath, [nextBin, ...args], {
+    stdio: 'inherit',
+    env: { ...process.env, CLAUDE_GUARD_AUTO_UPDATE_GUARD: '1' }
+  });
+  process.exit(rerun.status ?? 0);
+}
+
+maybeAutoUpdateGlobalInstall();
+
+if (args[0] === 'install') handleInstallCommand();
+if (args[0] === 'update') handleUpdateCommand();
 
 function checkProxyAlive(host, port) {
   return new Promise(resolve => {
@@ -51,6 +196,8 @@ if (args.includes('--help') || args.includes('-h')) {
   claude-guard proxy                      (inicia apenas o servidor proxy local)
   claude-guard tray                       (inicia o indicador na bandeja do sistema - Linux)
   claude-guard autostart [enable|disable] (ativa ou desativa o início automático com o sistema)
+  claude-guard install [--no-desktop]   (instala/atualiza globalmente e detecta clientes)
+  claude-guard update                   (força atualização da instalação global)
   claude-guard setup-desktop              (integra automaticamente ao Claude Desktop)
   claude-guard setup-codex-desktop        (integra automaticamente ao ChatGPT / Codex Desktop)
   claude-guard --help                     (exibe esta ajuda)
@@ -700,6 +847,10 @@ else if (args[0] === 'codex') {
   }
 
   const finalArgs = [...codexArgs];
+  const localCodexBase = `http://${config.host}:${config.port}/backend-api/`;
+  if (!finalArgs.some((arg, index) => arg === 'chatgpt_base_url' || (typeof arg === 'string' && arg.includes('chatgpt_base_url=')))) {
+    finalArgs.unshift('-c', `chatgpt_base_url="${localCodexBase}"`);
+  }
   if (!finalArgs.includes('respect_system_proxy') && !finalArgs.some(a => a.includes('respect_system_proxy'))) {
     finalArgs.unshift('--enable', 'respect_system_proxy');
   }

@@ -4,7 +4,7 @@
 
 Desenvolvido em **Node.js** puro (sem dependências externas), o **Claude-Guard** atua ativamente para reduzir drasticamente o consumo de tokens e cortar requisições repetitivas ou loops agênticos descontrolados tanto no **Claude Code / Desktop** quanto no **OpenAI Codex CLI / Desktop**.
 
-Versão atual: **1.3.0**.
+Versão atual: **1.3.1**.
 
 ---
 
@@ -31,6 +31,22 @@ O **Claude-Guard** atua em duas frentes complementares:
 ---
 
 ## Como Usar
+
+### Instalação global e atualização automática
+
+A instalação identifica os clientes disponíveis no ambiente — Claude CLI/Code, Codex CLI, Claude Desktop e ChatGPT/Codex Desktop — e registra a origem da instalação:
+
+```bash
+claude-guard install
+```
+
+Para atualizar manualmente a instalação global:
+
+```bash
+claude-guard update
+```
+
+Quando uma nova versão for encontrada no caminho de origem registrado, o comando global atualiza a instalação automaticamente antes de executar a ação solicitada. Use `--no-desktop` para instalar sem reconfigurar launchers gráficos.
 
 ### 1. Com o Claude Code CLI
 ```bash

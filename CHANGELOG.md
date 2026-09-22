@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.3.1 — 2026-09-22
+
+- Adicionado instalador global idempotente com `claude-guard install` e `claude-guard update`.
+- Detecção automática de Claude CLI/Code, Codex CLI, Claude Desktop e ChatGPT/Codex Desktop.
+- Estado da instalação salvo em `~/.config/claude-guard/installation.json` para atualizar a versão global quando a origem mudar.
+- Integrações desktop detectadas podem ser reconfiguradas automaticamente, mantendo backups dos launchers existentes.
+- Suporte ao endpoint `chatgpt.com/backend-api/` usado pelo Codex instalado no ambiente local.
+
 ## 1.3.0 — 2026-09-22
 
 - Corrigida a captura do Codex na dashboard usando `OPENAI_BASE_URL` e `CODEX_API_BASE` locais.
