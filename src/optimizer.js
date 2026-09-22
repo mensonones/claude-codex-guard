@@ -40,7 +40,7 @@ export class TokenOptimizer {
     const tail = text.slice(-Math.max(0, half));
     const prunedCount = text.length - (head.length + tail.length);
 
-    const replacement = `${head}\n\n[... claude-codex-guard: ${prunedCount} caracteres truncados para poupar tokens ...]\n\n${tail}`;
+    const replacement = `${head}\n\n[... output truncated: ${prunedCount} characters omitted for brevity ...]\n\n${tail}`;
     return {
       text: replacement,
       truncated: true,
@@ -95,8 +95,9 @@ export class TokenOptimizer {
 
     const toolIndices = toolGroups.flatMap(group => group.resultIndices);
 
+    const maxLoops = this.config.maxConsecutiveToolCalls || 0;
     let circuitBreakerActivated = false;
-    if (consecutiveToolTurns >= this.config.maxConsecutiveToolCalls) {
+    if (maxLoops > 0 && consecutiveToolTurns >= maxLoops) {
       circuitBreakerActivated = true;
       this.stats.circuitBreakerTriggered++;
     }
@@ -117,7 +118,7 @@ export class TokenOptimizer {
           const lines = msg.content.split('\n');
           const summary = lines.slice(0, 3).join('\n');
           const originalLength = msg.content.length;
-          msg.content = `${summary}\n[... claude-codex-guard: ${originalLength} caracteres de saída anterior compactados ...]`;
+          msg.content = `${summary}\n[... older output truncated: ${originalLength} characters omitted ...]`;
           this.stats.prunedToolResults++;
         } else {
           const res = this.truncateText(msg.content, this.config.maxToolResultChars);
@@ -133,7 +134,7 @@ export class TokenOptimizer {
               const lines = sub.text.split('\n');
               const summary = lines.slice(0, 3).join('\n');
               const originalLength = sub.text.length;
-              sub.text = `${summary}\n[... claude-codex-guard: ${originalLength} caracteres de saída anterior compactados ...]`;
+              sub.text = `${summary}\n[... older output truncated: ${originalLength} characters omitted ...]`;
               this.stats.prunedToolResults++;
             } else {
               const res = this.truncateText(sub.text, this.config.maxToolResultChars);
@@ -145,17 +146,19 @@ export class TokenOptimizer {
           }
         }
       }
+    }
 
-      // If circuit breaker triggered and this is the latest tool result, inject warning
-      if (circuitBreakerActivated && i === toolIndices[toolIndices.length - 1]) {
-        const warning = `\n\n[AVISO CRÍTICO - CODEX-GUARD CIRCUIT BREAKER]: Você já executou ${consecutiveToolTurns} ações de ferramentas consecutivas sem intervenção humana. PARE agora, resuma objetivamente o que já fez até aqui e peça confirmação ao usuário antes de continuar.`;
-        if (typeof msg.content === 'string') {
-          msg.content += warning;
-        } else if (Array.isArray(msg.content) && msg.content.length > 0) {
-          if (typeof msg.content[msg.content.length - 1].text === 'string') {
-            msg.content[msg.content.length - 1].text += warning;
-          }
+    if (circuitBreakerActivated) {
+      const notice = `\n\n[System Alert: You have performed ${consecutiveToolTurns} consecutive automated tool actions. Please pause, summarize your progress to the user, and ask for confirmation before executing further tool actions.]`;
+      const sysMsg = messages.find(m => m.role === 'system' || m.role === 'developer');
+      if (sysMsg) {
+        if (typeof sysMsg.content === 'string') {
+          sysMsg.content += notice;
+        } else if (Array.isArray(sysMsg.content)) {
+          sysMsg.content.push({ type: 'text', text: notice });
         }
+      } else {
+        messages.unshift({ role: 'system', content: notice.trim() });
       }
     }
 
@@ -181,7 +184,8 @@ export class TokenOptimizer {
     };
     visit(items);
 
-    const circuitBreakerActivated = functionCalls >= this.config.maxConsecutiveToolCalls;
+    const maxLoops = this.config.maxConsecutiveToolCalls || 0;
+    const circuitBreakerActivated = maxLoops > 0 && functionCalls >= maxLoops;
     if (circuitBreakerActivated) this.stats.circuitBreakerTriggered++;
 
     for (const outputItem of toolOutputs) {
@@ -192,8 +196,13 @@ export class TokenOptimizer {
       }
     }
 
-    if (circuitBreakerActivated && toolOutputs.length > 0) {
-      toolOutputs[toolOutputs.length - 1].output += `\n\n[AVISO CRÍTICO - CODEX-GUARD CIRCUIT BREAKER]: Você já executou ${functionCalls} ações de ferramentas consecutivas sem intervenção humana. PARE agora, resuma objetivamente o que já fez até aqui e peça confirmação ao usuário antes de continuar.`;
+    if (circuitBreakerActivated) {
+      const notice = `\n\n[System Alert: You have performed ${functionCalls} consecutive automated tool actions. Please pause, summarize your progress to the user, and ask for confirmation before executing further tool actions.]`;
+      if (typeof payload.instructions === 'string') {
+        payload.instructions += notice;
+      } else {
+        payload.instructions = notice.trim();
+      }
     }
 
     return circuitBreakerActivated;
@@ -225,9 +234,10 @@ export class TokenOptimizer {
       }
     }
 
-    // 2. Check Circuit Breaker (too many consecutive automated turns)
+    // 2. Check Circuit Breaker (too many consecutive automated turns; 0 disables)
+    const maxLoops = this.config.maxConsecutiveToolCalls || 0;
     let circuitBreakerActivated = false;
-    if (consecutiveToolTurns >= this.config.maxConsecutiveToolCalls) {
+    if (maxLoops > 0 && consecutiveToolTurns >= maxLoops) {
       circuitBreakerActivated = true;
       this.stats.circuitBreakerTriggered++;
     }
@@ -255,7 +265,7 @@ export class TokenOptimizer {
             const lines = block.content.split('\n');
             const summary = lines.slice(0, 3).join('\n');
             const originalLength = block.content.length;
-            block.content = `${summary}\n[... claude-codex-guard: ${originalLength} caracteres de saída anterior compactados ...]`;
+            block.content = `${summary}\n[... older output truncated: ${originalLength} characters omitted ...]`;
             this.stats.prunedToolResults++;
           } else {
             // Standard truncation for recent or shorter turns
@@ -272,7 +282,7 @@ export class TokenOptimizer {
                 const lines = sub.text.split('\n');
                 const summary = lines.slice(0, 3).join('\n');
                 const originalLength = sub.text.length;
-                sub.text = `${summary}\n[... claude-codex-guard: ${originalLength} caracteres de saída anterior compactados ...]`;
+                sub.text = `${summary}\n[... older output truncated: ${originalLength} characters omitted ...]`;
                 this.stats.prunedToolResults++;
               } else {
                 const res = this.truncateText(sub.text, this.config.maxToolResultChars);
@@ -284,16 +294,17 @@ export class TokenOptimizer {
             }
           }
         }
+      }
+    }
 
-        // If circuit breaker triggered and this is the latest tool result, inject warning
-        if (circuitBreakerActivated && i === toolResultIndices[toolResultIndices.length - 1]) {
-          const warning = `\n\n[AVISO CRÍTICO - CLAUDE-CODEX-GUARD CIRCUIT BREAKER]: Você já executou ${consecutiveToolTurns} ações de ferramentas consecutivas sem intervenção humana. PARE agora, resuma objetivamente o que já fez até aqui e peça confirmação ao usuário antes de continuar.`;
-          if (typeof block.content === 'string') {
-            block.content += warning;
-          } else if (Array.isArray(block.content) && block.content.length > 0) {
-            block.content[block.content.length - 1].text += warning;
-          }
-        }
+    if (circuitBreakerActivated) {
+      const notice = `\n\n[System Alert: You have performed ${consecutiveToolTurns} consecutive automated tool actions. Please pause, summarize your progress to the user, and ask for confirmation before executing further tool actions.]`;
+      if (!payload.system) {
+        payload.system = notice.trim();
+      } else if (typeof payload.system === 'string') {
+        payload.system += notice;
+      } else if (Array.isArray(payload.system)) {
+        payload.system.push({ type: 'text', text: notice });
       }
     }
 

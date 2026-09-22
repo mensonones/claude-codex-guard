@@ -35,7 +35,8 @@ test('TokenOptimizer truncates excessively large tool results', () => {
   assert.ok(res.savedTokens > 1000);
 
   const finalContent = res.payload.messages[2].content[0].content;
-  assert.ok(finalContent.includes('claude-codex-guard:'));
+  assert.ok(finalContent.includes('output truncated:'));
+  assert.ok(finalContent.includes('characters omitted for brevity'));
   assert.ok(finalContent.length <= 650);
 });
 
@@ -64,14 +65,14 @@ test('TokenOptimizer prunes older tool turns aggressively while keeping recent o
   
   // Turn 1 should be pruned
   const oldContent = res.payload.messages[2].content[0].content;
-  assert.ok(oldContent.includes('saída anterior compactados'));
+  assert.ok(oldContent.includes('characters omitted'));
 
   // Turn 2 should remain intact
   const recentContent = res.payload.messages[4].content[0].content;
   assert.ok(recentContent.includes('Recent content that is preserved:'));
 });
 
-test('TokenOptimizer triggers circuit breaker when loops exceed threshold', () => {
+test('TokenOptimizer triggers circuit breaker in system prompt when loops exceed threshold', () => {
   const optimizer = new TokenOptimizer({
     ...defaultConfig,
     maxConsecutiveToolCalls: 3
@@ -87,6 +88,30 @@ test('TokenOptimizer triggers circuit breaker when loops exceed threshold', () =
   const res = optimizer.optimize(payload);
 
   assert.equal(res.circuitBreakerActivated, true);
+  const systemText = typeof res.payload.system === 'string'
+    ? res.payload.system
+    : res.payload.system?.[0]?.text;
+  assert.ok(systemText && systemText.includes('System Alert: You have performed 4 consecutive automated tool actions'));
+  // Ensure tool_result was NOT polluted with instructions
   const lastToolResult = res.payload.messages[messages.length - 1].content[0].content;
-  assert.ok(lastToolResult.includes('AVISO CRÍTICO - CLAUDE-CODEX-GUARD CIRCUIT BREAKER'));
+  assert.equal(lastToolResult, 'Step 4 result');
+});
+
+test('TokenOptimizer does not trigger circuit breaker when disabled with 0', () => {
+  const optimizer = new TokenOptimizer({
+    ...defaultConfig,
+    maxConsecutiveToolCalls: 0
+  });
+
+  const messages = [{ role: 'user', content: 'Fix the bug' }];
+  for (let i = 1; i <= 10; i++) {
+    messages.push({ role: 'assistant', content: [{ type: 'tool_use', id: `${i}`, name: 'Bash', input: {} }] });
+    messages.push({ role: 'user', content: [{ type: 'tool_result', tool_use_id: `${i}`, content: `Step ${i} result` }] });
+  }
+
+  const payload = { model: 'claude-3-7-sonnet-20250219', messages };
+  const res = optimizer.optimize(payload);
+
+  assert.equal(res.circuitBreakerActivated, false);
+  assert.equal(res.payload.system, undefined);
 });

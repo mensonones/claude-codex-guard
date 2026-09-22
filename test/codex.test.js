@@ -59,7 +59,7 @@ test('TokenOptimizer truncates excessively large OpenAI tool results', () => {
   assert.ok(res.savedTokens > 1200);
 
   const finalContent = res.payload.messages[2].content;
-  assert.ok(finalContent.includes('claude-codex-guard:'));
+  assert.ok(finalContent.includes('output truncated:'));
   assert.ok(finalContent.length <= 650);
 });
 
@@ -78,7 +78,7 @@ test('TokenOptimizer truncates OpenAI Responses function_call_output items', () 
 
   assert.equal(result.modified, true);
   assert.ok(result.savedTokens > 300);
-  assert.ok(payload.input[2].output.includes('claude-codex-guard:'));
+  assert.ok(payload.input[2].output.includes('output truncated:'));
   assert.ok(payload.input[2].output.length <= 300);
 });
 
@@ -127,7 +127,7 @@ test('TokenOptimizer prunes older OpenAI tool turns aggressively while keeping r
 
   // Turn 1 should be pruned
   const oldContent = res.payload.messages[2].content;
-  assert.ok(oldContent.includes('saída anterior compactados'));
+  assert.ok(oldContent.includes('older output truncated:'));
 
   // Turn 2 should remain intact
   const recentContent = res.payload.messages[4].content;
@@ -158,8 +158,12 @@ test('TokenOptimizer triggers circuit breaker when OpenAI consecutive loops exce
   const res = optimizer.optimize(payload);
 
   assert.equal(res.circuitBreakerActivated, true);
-  const lastToolResult = res.payload.messages[messages.length - 1].content;
-  assert.ok(lastToolResult.includes('AVISO CRÍTICO - CODEX-GUARD CIRCUIT BREAKER'));
+  const sysMsg = res.payload.messages.find(m => m.role === 'system' || m.role === 'developer');
+  assert.ok(sysMsg, 'Should inject notice into system message rather than tool results');
+  assert.ok(sysMsg.content.includes('System Alert: You have performed'));
+  // Tool results must remain untainted by prompt injections
+  const lastToolResult = res.payload.messages.find(m => m.role === 'tool' && m.tool_call_id === 'call_4').content;
+  assert.equal(lastToolResult, 'Result of step 4');
 });
 
 test('detectProjectFromPayload detects project from OpenAI developer/system prompt or tool arguments', () => {
@@ -252,7 +256,7 @@ test('Proxy intercepts /v1/chat/completions, routes to OpenAI upstream, optimize
     assert.equal(upstreamReceivedBody.model, 'gpt-5.6-luna');
     // Content should have been truncated by optimizer
     const optimizedContent = upstreamReceivedBody.messages[2].content;
-    assert.ok(optimizedContent.includes('claude-codex-guard:'));
+    assert.ok(optimizedContent.includes('output truncated:'));
     assert.ok(optimizedContent.length < 500);
 
     // Verify DB recorded it under claude-codex-guard project
@@ -315,7 +319,7 @@ test('Proxy intercepts ChatGPT Codex backend API and routes it to the Codex upst
     });
 
     assert.equal(response.statusCode, 200);
-    assert.ok(upstreamReceivedBody.input[1].output.includes('claude-codex-guard:'));
+    assert.ok(upstreamReceivedBody.input[1].output.includes('output truncated:'));
     assert.equal(db.getOverallStats('claude-codex-guard').totalRequests, 1);
     const codexClient = db.getClientStats().find(client => client.client_type.startsWith('codex'));
     assert.equal(codexClient.request_count, 1);

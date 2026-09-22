@@ -60,7 +60,7 @@ test('Proxy intercepts /v1/messages, optimizes body, and streams response', asyn
 
   assert.ok(receivedBody, 'Mock Anthropic should receive body');
   const receivedContent = receivedBody.messages[2].content[0].content;
-  assert.ok(receivedContent.includes('claude-codex-guard:'));
+  assert.ok(receivedContent.includes('output truncated:'));
   assert.ok(receivedContent.length < 600);
   assert.ok(optimizer.stats.estimatedTokensSaved > 500);
 
