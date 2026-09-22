@@ -1,11 +1,12 @@
 {
   "name": "claude-guard",
-  "version": "1.1.0",
+  "version": "1.3.0",
   "description": "Active local proxy and command shims to minimize token consumption and request loops in Claude Code",
   "main": "src/proxy.js",
   "type": "module",
   "bin": {
-    "claude-guard": "bin/claude-guard.js"
+    "claude-guard": "bin/claude-guard.js",
+    "codex-guard": "bin/codex-guard.js"
   },
   "scripts": {
     "start": "node src/proxy.js",

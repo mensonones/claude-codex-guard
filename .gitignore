@@ -7,3 +7,5 @@ dist/
 *.db-wal
 .DS_Store
 claude-guard.config.json
+.argus/
+scripts/__pycache__/

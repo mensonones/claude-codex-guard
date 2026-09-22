@@ -30,6 +30,9 @@ export function detectProjectFromPayload(payload) {
   if (Array.isArray(payload.messages)) {
     for (let i = 0; i < Math.min(8, payload.messages.length); i++) {
       const msg = payload.messages[i];
+      if (msg.role === 'system' || msg.role === 'developer') {
+        if (typeof msg.content === 'string') textToScan += ' ' + msg.content;
+      }
       if (typeof msg.content === 'string') {
         textToScan += ' ' + msg.content;
       } else if (Array.isArray(msg.content)) {
@@ -38,6 +41,18 @@ export function detectProjectFromPayload(payload) {
             if (block.input.path) textToScan += ' ' + block.input.path;
             if (block.input.file_path) textToScan += ' ' + block.input.file_path;
             if (block.input.command) textToScan += ' ' + block.input.command;
+          }
+          if (block && typeof block.text === 'string') {
+            textToScan += ' ' + block.text;
+          }
+        }
+      }
+
+      // OpenAI tool_calls
+      if (Array.isArray(msg.tool_calls)) {
+        for (const tc of msg.tool_calls) {
+          if (tc && tc.function && typeof tc.function.arguments === 'string') {
+            textToScan += ' ' + tc.function.arguments;
           }
         }
       }

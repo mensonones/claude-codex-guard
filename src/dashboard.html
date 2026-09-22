@@ -466,6 +466,20 @@
       border: 1px solid #d9def8;
     }
 
+    .badge-claude {
+      background: oklch(96% 0.05 45);
+      color: oklch(48% 0.16 45);
+      border: 1px solid oklch(88% 0.09 45);
+      font-weight: 600;
+    }
+
+    .badge-codex {
+      background: oklch(96% 0.05 155);
+      color: oklch(42% 0.16 155);
+      border: 1px solid oklch(86% 0.09 155);
+      font-weight: 600;
+    }
+
     .feed-info {
       display: flex;
       flex-direction: column;
@@ -915,8 +929,8 @@
 
       <div class="feed-container" id="feedList">
         <div class="empty-state" id="emptyFeed">
-          Aguardando requisições do Claude Code ou Claude Desktop...<br>
-          <span>Envie uma instrução no Claude para ver os cortes em tempo real.</span>
+          Aguardando requisições do Claude Code, Claude Desktop ou OpenAI Codex...<br>
+          <span>Envie uma instrução no Claude ou Codex para ver os cortes em tempo real.</span>
         </div>
       </div>
     </section>
@@ -938,6 +952,11 @@
         <div class="empty-state">Nenhum projeto registrado ainda.</div>
       </div>
 
+      <div class="panel-header panel-header-spaced" id="agents"><div><span class="section-kicker">Origem</span><h2>Por agente</h2></div></div>
+      <div class="project-list" id="agentList">
+        <div class="empty-state">Nenhum agente registrado ainda.</div>
+      </div>
+
       <div class="panel-header panel-header-spaced" id="telemetry">
         <div><span class="section-kicker">Evidências</span><h2>Telemetrias bloqueadas</h2></div>
         <button class="action-button" onclick="openTelemetryModal()">Ver evidências</button>
@@ -953,7 +972,7 @@
       <details class="system-details">
         <summary>Ver configuração</summary>
         <div class="system-list">
-          <div>• <strong>Proxy Porta:</strong> <span class="system-value" id="sysPort">8080</span></div>
+          <div>• <strong>Proxy Porta:</strong> <span class="system-value" id="sysPort">48080</span></div>
           <div>• <strong>Alvo Anthropic:</strong> <span class="system-value">api.anthropic.com:443</span></div>
           <div>• <strong>Banco de Dados:</strong> <span class="system-value">~/.config/claude-guard/history.db</span></div>
           <div>• <strong>Shims de Terminal:</strong> <span class="status-value">Ativos (cat, git, find, npm)</span></div>
@@ -986,7 +1005,7 @@
           <span aria-hidden="true">✔</span> PROVA TÉCNICA: Tráfego de Rede 100% Interceptado e Abortado Localmente
         </div>
         <p class="proof-copy">
-          O <strong>Claude-Guard</strong> atua como um firewall local em <code>http://127.0.0.1:8080</code>. Quando o Claude Code ou Claude Desktop dispara requisições de métricas, traces ou logs, o proxy <strong>não abre conexão TCP ou TLS com a Anthropic</strong>.
+          O <strong>Claude-Guard</strong> atua como um firewall local em <code>http://127.0.0.1:48080</code>. Quando o Claude Code ou Claude Desktop dispara requisições de métricas, traces ou logs, o proxy <strong>não abre conexão TCP ou TLS com a Anthropic</strong>.
         </p>
         <div class="proof-details">
           <div>• <strong>Destino Upstream:</strong> <span class="proof-detail-value">0 bytes transmitidos</span></div>
@@ -1131,6 +1150,7 @@
                 type: 'request',
                 id: item.id,
                 project: item.project_name || 'Geral',
+                clientType: item.client_type,
                 model: item.model,
                 savedTokens: item.saved_tokens || 0,
                 origChars: item.original_chars || 0,
@@ -1256,7 +1276,7 @@
       document.getElementById('kpiSessionReqs').textContent = `Sessão atual: ${data.session?.totalRequests || 0}`;
       document.getElementById('kpiLoops').textContent = all.totalLoopsBlocked || 0;
       document.getElementById('kpiTelemetry').textContent = all.totalTelemetryBlocked || 0;
-      document.getElementById('sysPort').textContent = data.port || 8080;
+      document.getElementById('sysPort').textContent = data.port || 48080;
 
       // Update Projects
       if (Array.isArray(data.projects) && data.projects.length > 0) {
@@ -1286,6 +1306,66 @@
       } else {
         document.getElementById('projectList').innerHTML = '<div class="empty-state">Nenhum projeto registrado ainda.</div>';
       }
+
+      // Update Agents breakdown
+      if (Array.isArray(data.clients) && data.clients.length > 0) {
+        const agentListEl = document.getElementById('agentList');
+        agentListEl.innerHTML = '';
+        const clientMeta = {
+          'desktop': { name: 'Claude Desktop App', badge: 'badge-claude' },
+          'cli': { name: 'Claude Code CLI', badge: 'badge-claude' },
+          'codex-cli': { name: 'Codex CLI', badge: 'badge-codex' },
+          'codex-desktop': { name: 'Codex Desktop (ChatGPT)', badge: 'badge-codex' }
+        };
+        const maxTokens = Math.max(...data.clients.map(c => Number(c.tokens_saved) || 1), 1);
+
+        for (const c of data.clients) {
+          const meta = clientMeta[c.client_type] || { name: c.client_type, badge: 'badge-project' };
+          const tokens = Number(c.tokens_saved || 0);
+          const reqs = Number(c.request_count || 0);
+          const pct = Math.min(100, Math.round((tokens / maxTokens) * 100));
+
+          const row = document.createElement('div');
+          row.className = 'project-row';
+          row.innerHTML = `
+            <div class="project-row-header">
+              <span class="feed-badge ${meta.badge}" style="font-size:11px; padding:2px 8px;">${escapeHtml(meta.name)}</span>
+              <span style="color:var(--emerald); font-weight:600;">~${escapeHtml(tokens.toLocaleString())} tokens</span>
+            </div>
+            <div class="project-bar-bg">
+              <div class="project-bar-fill" style="width: ${pct}%;"></div>
+            </div>
+            <div style="font-size: 11px; color: var(--text-muted); display:flex; justify-content:space-between;">
+              <span>${escapeHtml(reqs)} requisições</span>
+              <span>Origem: ${escapeHtml(c.client_type)}</span>
+            </div>
+          `;
+          agentListEl.appendChild(row);
+        }
+      } else {
+        document.getElementById('agentList').innerHTML = '<div class="empty-state">Nenhum agente registrado ainda.</div>';
+      }
+    }
+
+    function getAgentBadge(data) {
+      const model = (data.model || '').toLowerCase();
+      const client = (data.clientType || '').toLowerCase();
+      if (
+        client.includes('codex') ||
+        model.startsWith('gpt-') ||
+        model.startsWith('o1') ||
+        model.startsWith('o3') ||
+        model.startsWith('o4')
+      ) {
+        return {
+          name: client === 'codex-desktop' ? 'Codex App' : 'Codex',
+          cls: 'badge-codex'
+        };
+      }
+      return {
+        name: client === 'desktop' ? 'Claude App' : 'Claude',
+        cls: 'badge-claude'
+      };
     }
 
     function addFeedItem(data, prepend = true) {
@@ -1331,8 +1411,11 @@
           ? `Modelo: ${data.model} | Payload: ${(data.origChars/1000).toFixed(1)}k → ${(data.optChars/1000).toFixed(1)}k chars`
           : `Requisição processada`;
 
+        const agent = getAgentBadge(data);
+
         item.innerHTML = `
           <div class="feed-left">
+            <span class="feed-badge ${agent.cls}">${escapeHtml(agent.name)}</span>
             <span class="feed-badge badge-project">${escapeHtml(data.project || 'Geral')}</span>
             <div class="feed-info">
               <div class="feed-title">${escapeHtml(titleText)}</div>

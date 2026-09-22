@@ -1,5 +1,6 @@
 import http from 'node:http';
 import https from 'node:https';
+import net from 'node:net';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -7,6 +8,7 @@ import { loadConfig } from './config.js';
 import { TokenOptimizer } from './optimizer.js';
 import { GuardDB } from './db.js';
 import { detectProjectFromPayload } from './projectDetector.js';
+import { notifyCircuitBreaker } from './notifier.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -39,12 +41,21 @@ export function createProxyServer(userConfig = {}) {
     const url = req.url || '/';
     const method = req.method || 'GET';
 
+    const pathname = url.split('?')[0];
+
     // Serve real-time Web Dashboard
-    if (method === 'GET' && (url === '/' || url === '/dashboard')) {
+    if ((method === 'GET' || method === 'HEAD') && (pathname === '/' || pathname === '/dashboard')) {
       try {
         const html = fs.readFileSync(DASHBOARD_HTML_PATH, 'utf-8');
-        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-        res.end(html);
+        res.writeHead(200, {
+          'Content-Type': 'text/html; charset=utf-8',
+          'Content-Length': Buffer.byteLength(html)
+        });
+        if (method === 'HEAD') {
+          res.end();
+        } else {
+          res.end(html);
+        }
       } catch (err) {
         res.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' });
         res.end('Erro ao carregar o dashboard: ' + err.message);
@@ -108,6 +119,7 @@ export function createProxyServer(userConfig = {}) {
         session: optimizer.getSummary(),
         allTime: db.getOverallStats(),
         projects: db.getProjectStats(),
+        clients: db.getClientStats(),
         telemetrySummary: db.getTelemetryStats()
       }, null, 2));
       return;
@@ -169,12 +181,49 @@ export function createProxyServer(userConfig = {}) {
       return;
     }
 
+    // Determine upstream target (Anthropic vs OpenAI vs custom)
+    let targetHost = config.targetHost;
+    let targetPort = config.targetPort;
+    let targetPath = url;
+
+    // Check if absolute URL (e.g. from standard HTTP_PROXY client)
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      try {
+        const parsed = new URL(url);
+        targetHost = parsed.hostname;
+        targetPort = parsed.port ? parseInt(parsed.port, 10) : (parsed.protocol === 'https:' ? 443 : 80);
+        targetPath = parsed.pathname + parsed.search;
+      } catch {}
+    } else {
+      // Relative URL: detect if OpenAI/Codex vs Anthropic
+      const isOpenAIEndpoint =
+        url.includes('/chat/completions') ||
+        url.includes('/responses') ||
+        url.includes('/backend-api/') ||
+        (url.startsWith('/v1/models') && !req.headers['x-api-key']);
+
+      if (isOpenAIEndpoint) {
+        targetHost = config.openaiTargetHost;
+        targetPort = config.openaiTargetPort;
+      } else if (req.headers['x-target-host']) {
+        targetHost = req.headers['x-target-host'];
+      }
+    }
+
     // Clone headers
     const forwardedHeaders = { ...req.headers };
-    forwardedHeaders['host'] = config.targetHost;
+    forwardedHeaders['host'] = targetHost;
+    delete forwardedHeaders['x-target-host'];
 
-    // Only optimize POST /v1/messages
-    if (method === 'POST' && url.includes('/messages')) {
+    // Optimize LLM messages (Anthropic /v1/messages or OpenAI /v1/chat/completions, /v1/responses)
+    const isOptimizable =
+      method === 'POST' && (
+        url.includes('/messages') ||
+        url.includes('/chat/completions') ||
+        url.includes('/responses')
+      );
+
+    if (isOptimizable) {
       const chunks = [];
       req.on('data', chunk => chunks.push(chunk));
       req.on('end', () => {
@@ -196,7 +245,8 @@ export function createProxyServer(userConfig = {}) {
             db.updateSessionProject(sessionUuid, currentProject, currentProjectPath);
           }
 
-          const result = optimizer.optimize(jsonPayload);
+          const formatHint = (url.includes('/chat/completions') || url.includes('/responses')) ? 'openai' : 'anthropic';
+          const result = optimizer.optimize(jsonPayload, formatHint);
 
           if (result.modified) {
             requestBody = JSON.stringify(result.payload);
@@ -210,8 +260,9 @@ export function createProxyServer(userConfig = {}) {
 
             if (result.circuitBreakerActivated) {
               console.log(
-                `\x1b[33m[claude-guard]\x1b[0m ⚠️  \x1b[1mCIRCUIT BREAKER ATIVADO:\x1b[0m Limite de loops atingido (${config.maxConsecutiveToolCalls}). Claude foi instruído a parar e reportar.`
+                `\x1b[33m[claude-guard]\x1b[0m ⚠️  \x1b[1mCIRCUIT BREAKER ATIVADO:\x1b[0m Limite de loops atingido (${config.maxConsecutiveToolCalls}). Agente foi instruído a parar e reportar.`
               );
+              notifyCircuitBreaker(currentProject, config.maxConsecutiveToolCalls);
             }
           } else {
             console.log(`\x1b[36m[claude-guard]\x1b[0m → [\x1b[1m${currentProject}\x1b[0m] Req #${result.stats.totalRequests}: Direta (sem corte necessário)`);
@@ -239,6 +290,7 @@ export function createProxyServer(userConfig = {}) {
           broadcastEvent('request', {
             type: 'request',
             project: currentProject,
+            clientType,
             model,
             savedTokens: result.savedTokens,
             origChars: originalLen,
@@ -256,14 +308,14 @@ export function createProxyServer(userConfig = {}) {
         forwardedHeaders['content-length'] = Buffer.byteLength(bodyBuffer);
 
         const targetOptions = {
-          hostname: config.targetHost,
-          port: config.targetPort,
-          path: url,
+          hostname: targetHost,
+          port: targetPort,
+          path: targetPath,
           method: method,
           headers: forwardedHeaders
         };
 
-        const clientReq = (config.targetPort === 443 ? https : http).request(targetOptions, targetRes => {
+        const clientReq = (targetPort === 443 ? https : http).request(targetOptions, targetRes => {
           res.writeHead(targetRes.statusCode || 200, targetRes.headers);
           targetRes.pipe(res);
         });
@@ -272,7 +324,7 @@ export function createProxyServer(userConfig = {}) {
           console.error('[claude-guard] Forwarding error:', err.message);
           if (!res.headersSent) {
             res.writeHead(502, { 'content-type': 'application/json' });
-            res.end(JSON.stringify({ error: 'Proxy error to Anthropic', message: err.message }));
+            res.end(JSON.stringify({ error: `Proxy error to ${targetHost}`, message: err.message }));
           }
         });
 
@@ -281,14 +333,14 @@ export function createProxyServer(userConfig = {}) {
       });
     } else {
       const targetOptions = {
-        hostname: config.targetHost,
-        port: config.targetPort,
-        path: url,
+        hostname: targetHost,
+        port: targetPort,
+        path: targetPath,
         method: method,
         headers: forwardedHeaders
       };
 
-      const clientReq = (config.targetPort === 443 ? https : http).request(targetOptions, targetRes => {
+      const clientReq = (targetPort === 443 ? https : http).request(targetOptions, targetRes => {
         res.writeHead(targetRes.statusCode || 200, targetRes.headers);
         targetRes.pipe(res);
       });
@@ -297,12 +349,35 @@ export function createProxyServer(userConfig = {}) {
         console.error('[claude-guard] Forwarding error:', err.message);
         if (!res.headersSent) {
           res.writeHead(502, { 'content-type': 'application/json' });
-          res.end(JSON.stringify({ error: 'Proxy error to Anthropic', message: err.message }));
+          res.end(JSON.stringify({ error: `Proxy error to ${targetHost}`, message: err.message }));
         }
       });
 
       req.pipe(clientReq);
     }
+  });
+
+  // Handle CONNECT method for HTTPS tunneling
+  server.on('connect', (req, clientSocket, head) => {
+    const parts = req.url.split(':');
+    const host = parts[0];
+    const port = parseInt(parts[1] || '443', 10);
+
+    const serverSocket = net.connect(port, host, () => {
+      clientSocket.write('HTTP/1.1 200 Connection Established\r\n\r\n');
+      if (head && head.length > 0) {
+        serverSocket.write(head);
+      }
+      serverSocket.pipe(clientSocket);
+      clientSocket.pipe(serverSocket);
+    });
+
+    serverSocket.on('error', () => {
+      clientSocket.destroy();
+    });
+    clientSocket.on('error', () => {
+      serverSocket.destroy();
+    });
   });
 
   return { server, config, optimizer, db, broadcastEvent, sseClients };

@@ -2,10 +2,12 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 export const defaultConfig = {
-  port: parseInt(process.env.CLAUDE_GUARD_PORT || '8080', 10),
+  port: parseInt(process.env.CLAUDE_GUARD_PORT || '48080', 10),
   host: process.env.CLAUDE_GUARD_HOST || '127.0.0.1',
   targetHost: process.env.ANTHROPIC_TARGET_HOST || 'api.anthropic.com',
   targetPort: parseInt(process.env.ANTHROPIC_TARGET_PORT || '443', 10),
+  openaiTargetHost: process.env.OPENAI_TARGET_HOST || 'api.openai.com',
+  openaiTargetPort: parseInt(process.env.OPENAI_TARGET_PORT || '443', 10),
   
   // Truncation limits for individual tool outputs
   maxToolResultChars: parseInt(process.env.CLAUDE_GUARD_MAX_TOOL_CHARS || '3500', 10),

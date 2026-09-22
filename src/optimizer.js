@@ -49,19 +49,160 @@ export class TokenOptimizer {
   }
 
   /**
-   * Optimize the Anthropic API request body
+   * Detects if the payload follows OpenAI Chat Completions / Responses format
    */
-  optimize(payload) {
-    this.stats.totalRequests++;
+  detectIsOpenAI(payload) {
+    if (!payload || !Array.isArray(payload.messages)) return false;
+    for (const msg of payload.messages) {
+      if (
+        msg.role === 'tool' ||
+        msg.role === 'function' ||
+        (msg.role === 'assistant' && Array.isArray(msg.tool_calls))
+      ) {
+        return true;
+      }
+    }
+    return false;
+  }
 
-    if (!payload || !Array.isArray(payload.messages) || payload.messages.length === 0) {
-      return { payload, stats: { ...this.stats }, modified: false };
+  /**
+   * Optimize OpenAI format payloads (role: 'tool' or role: 'function')
+   */
+  optimizeOpenAI(payload) {
+    const messages = payload.messages;
+    const toolGroups = [];
+    let activeGroup = null;
+    let consecutiveToolTurns = 0;
+
+    for (let i = 0; i < messages.length; i++) {
+      const msg = messages[i];
+      if (msg.role === 'assistant' && Array.isArray(msg.tool_calls) && msg.tool_calls.length > 0) {
+        activeGroup = { resultIndices: [] };
+        toolGroups.push(activeGroup);
+        consecutiveToolTurns++;
+      } else if (msg.role === 'tool' || msg.role === 'function') {
+        if (!activeGroup) {
+          activeGroup = { resultIndices: [] };
+          toolGroups.push(activeGroup);
+          consecutiveToolTurns++;
+        }
+        activeGroup.resultIndices.push(i);
+      } else if (msg.role === 'user') {
+        consecutiveToolTurns = 0;
+        activeGroup = null;
+      }
     }
 
-    const originalJson = JSON.stringify(payload);
-    const originalLen = originalJson.length;
-    this.stats.totalOriginalChars += originalLen;
+    const toolIndices = toolGroups.flatMap(group => group.resultIndices);
 
+    let circuitBreakerActivated = false;
+    if (consecutiveToolTurns >= this.config.maxConsecutiveToolCalls) {
+      circuitBreakerActivated = true;
+      this.stats.circuitBreakerTriggered++;
+    }
+
+    const recentIndicesSet = new Set(
+      toolGroups.slice(-Math.max(1, this.config.keepRecentToolTurns))
+        .flatMap(group => group.resultIndices)
+    );
+
+    for (let i = 0; i < messages.length; i++) {
+      const msg = messages[i];
+      if (msg.role !== 'tool' && msg.role !== 'function') continue;
+
+      const isOlderTurn = !recentIndicesSet.has(i);
+
+      if (typeof msg.content === 'string') {
+        if (isOlderTurn && msg.content.length > 300) {
+          const lines = msg.content.split('\n');
+          const summary = lines.slice(0, 3).join('\n');
+          const originalLength = msg.content.length;
+          msg.content = `${summary}\n[... claude-guard: ${originalLength} caracteres de saída anterior compactados ...]`;
+          this.stats.prunedToolResults++;
+        } else {
+          const res = this.truncateText(msg.content, this.config.maxToolResultChars);
+          if (res.truncated) {
+            msg.content = res.text;
+            this.stats.truncatedToolResults++;
+          }
+        }
+      } else if (Array.isArray(msg.content)) {
+        for (let sub of msg.content) {
+          if (sub && typeof sub.text === 'string') {
+            if (isOlderTurn && sub.text.length > 300) {
+              const lines = sub.text.split('\n');
+              const summary = lines.slice(0, 3).join('\n');
+              const originalLength = sub.text.length;
+              sub.text = `${summary}\n[... claude-guard: ${originalLength} caracteres de saída anterior compactados ...]`;
+              this.stats.prunedToolResults++;
+            } else {
+              const res = this.truncateText(sub.text, this.config.maxToolResultChars);
+              if (res.truncated) {
+                sub.text = res.text;
+                this.stats.truncatedToolResults++;
+              }
+            }
+          }
+        }
+      }
+
+      // If circuit breaker triggered and this is the latest tool result, inject warning
+      if (circuitBreakerActivated && i === toolIndices[toolIndices.length - 1]) {
+        const warning = `\n\n[AVISO CRÍTICO - CODEX-GUARD CIRCUIT BREAKER]: Você já executou ${consecutiveToolTurns} ações de ferramentas consecutivas sem intervenção humana. PARE agora, resuma objetivamente o que já fez até aqui e peça confirmação ao usuário antes de continuar.`;
+        if (typeof msg.content === 'string') {
+          msg.content += warning;
+        } else if (Array.isArray(msg.content) && msg.content.length > 0) {
+          if (typeof msg.content[msg.content.length - 1].text === 'string') {
+            msg.content[msg.content.length - 1].text += warning;
+          }
+        }
+      }
+    }
+
+    return circuitBreakerActivated;
+  }
+
+  optimizeOpenAIResponses(payload) {
+    const items = Array.isArray(payload.input) ? payload.input : [];
+    const toolOutputs = [];
+    let functionCalls = 0;
+
+    const visit = value => {
+      if (!value || typeof value !== 'object') return;
+      if (Array.isArray(value)) {
+        value.forEach(visit);
+        return;
+      }
+      if (value.type === 'function_call') functionCalls++;
+      if (value.type === 'function_call_output' && typeof value.output === 'string') {
+        toolOutputs.push(value);
+      }
+      Object.values(value).forEach(visit);
+    };
+    visit(items);
+
+    const circuitBreakerActivated = functionCalls >= this.config.maxConsecutiveToolCalls;
+    if (circuitBreakerActivated) this.stats.circuitBreakerTriggered++;
+
+    for (const outputItem of toolOutputs) {
+      const result = this.truncateText(outputItem.output, this.config.maxToolResultChars);
+      if (result.truncated) {
+        outputItem.output = result.text;
+        this.stats.truncatedToolResults++;
+      }
+    }
+
+    if (circuitBreakerActivated && toolOutputs.length > 0) {
+      toolOutputs[toolOutputs.length - 1].output += `\n\n[AVISO CRÍTICO - CODEX-GUARD CIRCUIT BREAKER]: Você já executou ${functionCalls} ações de ferramentas consecutivas sem intervenção humana. PARE agora, resuma objetivamente o que já fez até aqui e peça confirmação ao usuário antes de continuar.`;
+    }
+
+    return circuitBreakerActivated;
+  }
+
+  /**
+   * Optimize Anthropic format payloads (content blocks with type: 'tool_result')
+   */
+  optimizeAnthropic(payload) {
     const messages = payload.messages;
 
     // 1. Identify tool result turn indices
@@ -154,6 +295,35 @@ export class TokenOptimizer {
           }
         }
       }
+    }
+
+    return circuitBreakerActivated;
+  }
+
+  /**
+   * Optimize the API request body (supports Anthropic and OpenAI formats)
+   */
+  optimize(payload, formatHint = null) {
+    this.stats.totalRequests++;
+
+    const isResponses = formatHint === 'openai' && Array.isArray(payload?.input);
+    if (!payload || (!Array.isArray(payload.messages) && !isResponses) || (Array.isArray(payload.messages) && payload.messages.length === 0 && !isResponses)) {
+      return { payload, stats: { ...this.stats }, modified: false, savedChars: 0, savedTokens: 0 };
+    }
+
+    const originalJson = JSON.stringify(payload);
+    const originalLen = originalJson.length;
+    this.stats.totalOriginalChars += originalLen;
+
+    const isOpenAI = formatHint === 'openai' || this.detectIsOpenAI(payload);
+
+    let circuitBreakerActivated = false;
+    if (isResponses) {
+      circuitBreakerActivated = this.optimizeOpenAIResponses(payload);
+    } else if (isOpenAI) {
+      circuitBreakerActivated = this.optimizeOpenAI(payload);
+    } else {
+      circuitBreakerActivated = this.optimizeAnthropic(payload);
     }
 
     const optimizedJson = JSON.stringify(payload);
