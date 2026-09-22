@@ -1,14 +1,25 @@
 # Changelog
 
-## Não lançado
+## [1.4.0] - 2026-09-22
 
-- Renomeado o pacote e comando principal para `claude-codex-guard`, incluindo arquivos, configuração, variáveis de ambiente, endpoints, headers, provider, serviço e identidade visual.
-- Mantido `codex-guard` como atalho dedicado ao Codex.
-- Corrigido o roteamento de `/v1/models` para requisições Anthropic sob OAuth/Bearer token (Claude Code e Claude Desktop), impedindo que fossem incorretamente direcionadas para a API da OpenAI.
-- Implementado tratamento local de preflight CORS (`OPTIONS`) com HTTP 204 e cabeçalhos `Access-Control-*`, eliminando bloqueios por navegadores e webviews Electron.
-- Sanitização de cabeçalhos locais `Origin` e `Referer` antes do envio upstream para prevenir erros `Disallowed CORS origin` do Cloudflare.
-- Corrigido encerramento prematuro de requisições GET upstream (`res.on('close')` em vez de `req.on('close')`).
-- Preservação completa das configurações de plugins, marketplaces e ferramentas locais (`node_repl`) no `config.toml` do Codex Desktop.
+- **Correção de Falso-Positivo de Injeção de Prompt**:
+  - Avisos de Circuit Breaker agora são direcionados ao prompt de sistema (`payload.system` na Anthropic, `system`/`developer` na OpenAI, e `payload.instructions` nas Responses API), prevenindo que filtros de segurança interpretem ordens no `tool_result` como Indirect Prompt Injection.
+- **Marcadores de Truncamento Neutros**:
+  - Cortes de saídas longas de ferramentas agora utilizam o formato padrão de CLI (`[... output truncated: N characters omitted for brevity ...]`), sem expor o nome do proxy nos dados retornados aos modelos.
+- **Limites Padrão Mais Generosos**:
+  - `maxToolResultChars` ampliado de `3.500` para `16.000` caracteres (~400 linhas de código sem truncamento).
+  - `keepRecentToolTurns` ampliado de `2` para `4` turnos recentes preservados na íntegra.
+  - `maxConsecutiveToolCalls` ampliado de `12` para `20` ações consecutivas, com suporte a desativação completa configurando `0`.
+- **Tema Escuro (Dark Mode) na Dashboard**:
+  - Suporte completo a Dark Mode em `src/dashboard.html` utilizando tokens OKLCH, detecção automática do tema do sistema (`prefers-color-scheme`), script inline anti-FOUC e switch manual com persistência local.
+- **Encerramento Imediato do Daemon**:
+  - Implementado `server.closeAllConnections()` e fallback timer no tratamento de `SIGINT`/`SIGTERM` em `src/proxy.js` e `bin/claude-codex-guard.js`, permitindo reinicializações instantâneas via `systemctl --user restart`.
+- **Renomeação e Compatibilidade Multi-Provedor**:
+  - Renomeado pacote e comando para `claude-codex-guard` com compatibilidade retroativa para `codex-guard`.
+  - Tratamento local de preflight CORS (`OPTIONS`) com HTTP 204.
+  - Roteamento aprimorado de `/v1/models` para requisições Anthropic sob OAuth.
+  - Sanitização de cabeçalhos locais `Origin` e `Referer` antes do envio upstream.
+  - Preservação de configurações personalizadas de plugins e ferramentas no `config.toml` do Codex Desktop.
 
 
 ## [1.3.4] - 2026-09-22

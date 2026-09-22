@@ -306,7 +306,7 @@ if (args.includes('--help') || args.includes('-h')) {
   1. Proxy HTTP local (porta 48080) interceptando chamadas Anthropic & OpenAI.
   2. Shims no PATH (cat, git, find, npm) impedem despejo de logs excessivos no contexto.
   3. Poda contextualmente 'tool_results' de rodadas antigas e trunca saídas gigantes.
-  4. Circuit Breaker contra loops agênticos (mais de 12 tool calls seguidas).
+  4. Circuit Breaker contra loops agênticos (mais de 20 tool calls seguidas).
   5. Separação automática por projeto no banco SQLite (~/.config/claude-codex-guard/history.db).
 `);
   process.exit(0);

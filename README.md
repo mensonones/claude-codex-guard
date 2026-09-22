@@ -4,7 +4,7 @@
 
 Desenvolvido em **Node.js** puro (sem dependências externas) e testado em **Ubuntu Linux** (GNOME Shell / Wayland / X11), o projeto otimiza requisições JSON de Anthropic Messages, OpenAI Chat Completions/Responses e Codex `/backend-api/`, além de bloquear telemetria localmente.
 
-Versão atual: **1.3.4**.
+Versão atual: **1.4.0**.
 
 ---
 
@@ -16,9 +16,9 @@ O **Claude-Codex-Guard** atua em duas frentes complementares:
 
 1. **Proxy Reverso Inteligente Multi-Provedor (`src/proxy.js`)**:
    - **Compatível com Anthropic & OpenAI**: Roteamento dinâmico automático para `/v1/messages` (Claude) e `/v1/chat/completions`, `/v1/responses` ou `/backend-api/` (Codex / OpenAI).
-   - **Poda Histórica de Contexto (`keepRecentToolTurns: 2`)**: Preserva os resultados de ferramentas recentes intactos, mas compacta saídas de rodadas anteriores (onde o agente já extraiu o que precisava). Reduz em até 70% o inchaço cumulativo de tokens.
-   - **Truncamento Cirúrgico (`maxToolResultChars: 3500`)**: Se um comando produzir milhares de linhas, o proxy preserva o início e o fim do log com marcador explícito de corte, evitando faturar arquivos gigantes desnecessariamente.
-   - **Circuit Breaker / Anti-Loop (`maxConsecutiveToolCalls: 12`)**: Se o agente entrar em um loop automático tentando rodar comandos repetidamente sem intervenção humana, o proxy injeta uma instrução forçando o agente a parar, reportar os achados e pedir confirmação ao usuário.
+   - **Poda Histórica de Contexto (`keepRecentToolTurns: 4`)**: Preserva os resultados de ferramentas dos últimos 4 turnos intactos, mas compacta saídas de rodadas mais antigas (onde o agente já extraiu o que precisava). Reduz significativamente o inchaço cumulativo de tokens.
+   - **Truncamento Cirúrgico Neutro (`maxToolResultChars: 16000`)**: Se um comando produzir milhares de linhas, o proxy preserva o início e o fim da saída com marcador neutro de CLI (`[... output truncated: N characters omitted for brevity ...]`), sem expor nomes de proxy e sem disparar filtros de segurança dos modelos.
+   - **Circuit Breaker / Anti-Loop no System Prompt (`maxConsecutiveToolCalls: 20`)**: Se o agente entrar em um loop automático tentando rodar comandos repetidamente sem intervenção humana, o proxy injeta uma instrução segura no System Prompt (`payload.system` ou mensagem `developer`), forçando o agente a pausar e pedir confirmação ao usuário sem falsos-positivos de injeção de prompt. Suporta valor `0` para desativar.
    - **Zero Latência & Tunneling CONNECT**: Streaming transparente e suporte a túneis HTTPS.
    - **Reconexão Transparente**: Reconecta-se automaticamente a instâncias ativas do proxy sem conflito de portas.
 
@@ -163,7 +163,7 @@ claude-codex-guard dashboard
 
 Ou acesse diretamente: **`http://localhost:48080/dashboard`**
 
-O painel foi redesenhado como um cockpit claro e compacto, com navegação lateral, resumo de saúde, cartões de economia e áreas de auditoria. Ele mantém a densidade visual de uma ferramenta operacional sem depender de tema escuro.
+O painel foi desenhado como um cockpit moderno e compacto, com suporte completo a **Tema Claro e Tema Escuro (Dark Mode)**, alternância por switch na barra superior e detecção automática da preferência do sistema operacional (`prefers-color-scheme`).
 
 **Recursos do Dashboard:**
 - **Live Activity Feed (SSE)**: exibe cada requisição interceptada em tempo real, com projeto, origem, método e tokens poupados.
@@ -227,9 +227,9 @@ Você pode ajustar os limites criando um arquivo `claude-codex-guard.config.json
 | Variável | Padrão | Descrição |
 | :--- | :--- | :--- |
 | `CLAUDE_CODEX_GUARD_PORT` | `48080` | Porta local do proxy |
-| `CLAUDE_CODEX_GUARD_MAX_TOOL_CHARS` | `3500` | Limite de caracteres por saída de ferramenta (~900 tokens) |
-| `CLAUDE_CODEX_GUARD_KEEP_TURNS` | `2` | Quantidade de turnos recentes de ferramentas preservados |
-| `CLAUDE_CODEX_GUARD_MAX_LOOPS` | `12` | Limite do Circuit Breaker para chamadas de ferramentas seguidas |
+| `CLAUDE_CODEX_GUARD_MAX_TOOL_CHARS` | `16000` | Limite de caracteres por saída de ferramenta (~4.000 tokens) |
+| `CLAUDE_CODEX_GUARD_KEEP_TURNS` | `4` | Quantidade de turnos recentes de ferramentas preservados |
+| `CLAUDE_CODEX_GUARD_MAX_LOOPS` | `20` | Limite do Circuit Breaker para chamadas de ferramentas seguidas (`0` desativa) |
 | `CLAUDE_CODEX_GUARD_ENABLE_SHIMS` | `true` | Habilitar/desabilitar shims de terminal (`cat`, `git`, `find`, `npm`) |
 
 ---
