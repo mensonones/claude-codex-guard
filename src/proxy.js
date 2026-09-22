@@ -587,10 +587,17 @@ if (process.argv[1] && process.argv[1].endsWith('proxy.js')) {
     console.table(optimizer.getSummary());
     console.log('\x1b[36m[claude-codex-guard]\x1b[0m Acumulado no SQLite:');
     console.table(db.getOverallStats());
+    if (typeof server.closeAllConnections === 'function') {
+      server.closeAllConnections();
+    }
     server.close(() => {
       db.close();
       process.exit(0);
     });
+    setTimeout(() => {
+      try { db.close(); } catch {}
+      process.exit(0);
+    }, 1500).unref();
   };
 
   process.on('SIGINT', cleanup);
