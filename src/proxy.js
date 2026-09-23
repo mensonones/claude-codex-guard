@@ -14,6 +14,18 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const DASHBOARD_HTML_PATH = path.join(__dirname, 'dashboard.html');
 
+const httpsAgent = new https.Agent({
+  keepAlive: true,
+  keepAliveMsecs: 10000,
+  timeout: 300000
+});
+
+const httpAgent = new http.Agent({
+  keepAlive: true,
+  keepAliveMsecs: 10000,
+  timeout: 300000
+});
+
 /**
  * Classifies a request without relying on the process that started the proxy.
  * This matters when Claude and Codex share one long-lived proxy daemon.
@@ -493,7 +505,8 @@ export function createProxyServer(userConfig = {}) {
           port: targetPort,
           path: targetPath,
           method: method,
-          headers: forwardedHeaders
+          headers: forwardedHeaders,
+          agent: targetPort === 443 ? httpsAgent : httpAgent
         };
 
         const clientReq = (targetPort === 443 ? https : http).request(targetOptions, targetRes => {
@@ -522,7 +535,8 @@ export function createProxyServer(userConfig = {}) {
         port: targetPort,
         path: targetPath,
         method: method,
-        headers: forwardedHeaders
+        headers: forwardedHeaders,
+        agent: targetPort === 443 ? httpsAgent : httpAgent
       };
 
       const clientReq = (targetPort === 443 ? https : http).request(targetOptions, targetRes => {

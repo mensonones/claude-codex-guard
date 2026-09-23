@@ -167,38 +167,87 @@ export class TokenOptimizer {
 
   optimizeOpenAIResponses(payload) {
     const items = Array.isArray(payload.input) ? payload.input : [];
-    const toolOutputs = [];
-    let functionCalls = 0;
+    const toolGroups = [];
+    let activeGroup = null;
+    let consecutiveToolTurns = 0;
+    let lastWasFunctionCall = false;
 
-    const visit = value => {
-      if (!value || typeof value !== 'object') return;
-      if (Array.isArray(value)) {
-        value.forEach(visit);
-        return;
+    for (const item of items) {
+      if (!item || typeof item !== 'object') continue;
+
+      const isUser = item.role === 'user' || (item.type === 'message' && item.role === 'user');
+      if (isUser) {
+        consecutiveToolTurns = 0;
+        activeGroup = null;
+        lastWasFunctionCall = false;
+        continue;
       }
-      if (value.type === 'function_call') functionCalls++;
-      if (value.type === 'function_call_output' && typeof value.output === 'string') {
-        toolOutputs.push(value);
+
+      if (item.type === 'function_call') {
+        if (!lastWasFunctionCall) {
+          activeGroup = { outputs: [] };
+          toolGroups.push(activeGroup);
+          consecutiveToolTurns++;
+        }
+        lastWasFunctionCall = true;
+      } else if (item.type === 'function_call_output') {
+        lastWasFunctionCall = false;
+        if (!activeGroup) {
+          activeGroup = { outputs: [] };
+          toolGroups.push(activeGroup);
+          consecutiveToolTurns++;
+        }
+        if (typeof item.output === 'string') {
+          activeGroup.outputs.push(item);
+        }
+      } else {
+        lastWasFunctionCall = false;
       }
-      Object.values(value).forEach(visit);
-    };
-    visit(items);
+    }
 
     const maxLoops = this.config.maxConsecutiveToolCalls || 0;
-    const circuitBreakerActivated = maxLoops > 0 && functionCalls >= maxLoops;
-    if (circuitBreakerActivated) this.stats.circuitBreakerTriggered++;
+    let circuitBreakerActivated = false;
+    if (maxLoops > 0 && consecutiveToolTurns >= maxLoops) {
+      circuitBreakerActivated = true;
+      this.stats.circuitBreakerTriggered++;
+    }
 
-    for (const outputItem of toolOutputs) {
-      const result = this.truncateText(outputItem.output, this.config.maxToolResultChars);
-      if (result.truncated) {
-        outputItem.output = result.text;
-        this.stats.truncatedToolResults++;
+    const keepCount = Math.max(1, this.config.keepRecentToolTurns);
+    const recentGroups = new Set(toolGroups.slice(-keepCount));
+
+    for (const group of toolGroups) {
+      const isOlderTurn = !recentGroups.has(group);
+      for (const outputItem of group.outputs) {
+        if (typeof outputItem.output !== 'string') continue;
+
+        if (isOlderTurn && outputItem.output.length > 300) {
+          const lines = outputItem.output.split('\n');
+          const summary = lines.slice(0, 3).join('\n');
+          const originalLength = outputItem.output.length;
+          outputItem.output = `${summary}\n[... older output truncated: ${originalLength} characters omitted ...]`;
+          this.stats.prunedToolResults++;
+        } else {
+          const res = this.truncateText(outputItem.output, this.config.maxToolResultChars);
+          if (res.truncated) {
+            outputItem.output = res.text;
+            this.stats.truncatedToolResults++;
+          }
+        }
       }
     }
 
     if (circuitBreakerActivated) {
-      const notice = `\n\n[System Alert: You have performed ${functionCalls} consecutive automated tool actions. Please pause, summarize your progress to the user, and ask for confirmation before executing further tool actions.]`;
-      if (typeof payload.instructions === 'string') {
+      const notice = `\n\n[System Alert: You have performed ${consecutiveToolTurns} consecutive automated tool actions. Please pause, summarize your progress to the user, and ask for confirmation before executing further tool actions.]`;
+      const sysMsg = items.find(
+        m => m && (m.role === 'system' || m.role === 'developer' || (m.type === 'message' && (m.role === 'system' || m.role === 'developer')))
+      );
+      if (sysMsg) {
+        if (typeof sysMsg.content === 'string') {
+          sysMsg.content += notice;
+        } else if (Array.isArray(sysMsg.content)) {
+          sysMsg.content.push({ type: 'text', text: notice });
+        }
+      } else if (typeof payload.instructions === 'string') {
         payload.instructions += notice;
       } else {
         payload.instructions = notice.trim();

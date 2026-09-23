@@ -132,6 +132,39 @@ function syncGuardCodexHome(port) {
 
   const finalToml = guardBlock + '\n' + cleanLines.join('\n').trim() + '\n';
   fs.writeFileSync(destConfigPath, finalToml);
+  syncCodexCliConfig(port);
+}
+
+function syncCodexCliConfig(port) {
+  const home = process.env.HOME || '.';
+  const codexDir = path.resolve(home, '.codex');
+  const codexConfigPath = path.join(codexDir, 'config.toml');
+  if (!fs.existsSync(codexConfigPath)) return;
+
+  const backupPath = `${codexConfigPath}.backup`;
+  if (!fs.existsSync(backupPath)) {
+    try { fs.copyFileSync(codexConfigPath, backupPath); } catch {}
+  }
+
+  try {
+    const orig = fs.readFileSync(codexConfigPath, 'utf8');
+    const lines = orig.split('\n').filter(l => !l.trim().startsWith('model_provider =') && !l.trim().startsWith('model_provider='));
+    let inBlock = false;
+    const cleanLines = [];
+    for (const l of lines) {
+      if (l.trim() === '[model_providers.claude-codex-guard]') { inBlock = true; continue; }
+      if (inBlock) {
+        if (l.trim().startsWith('[') && l.trim().endsWith(']')) inBlock = false;
+        else continue;
+      }
+      cleanLines.push(l);
+    }
+    const guardBlock = `model_provider = "claude-codex-guard"\n\n[model_providers.claude-codex-guard]\nname = "Claude Codex Guard"\nbase_url = "http://127.0.0.1:${port}/backend-api/codex"\nwire_api = "responses"\nrequires_openai_auth = true\nsupports_websockets = false\n`;
+    const finalToml = guardBlock + '\n' + cleanLines.join('\n').trim() + '\n';
+    fs.writeFileSync(codexConfigPath, finalToml);
+  } catch (err) {
+    console.warn(`[claude-codex-guard] Aviso: não foi possível atualizar ${codexConfigPath}: ${err.message}`);
+  }
 }
 
 function detectEnvironment() {

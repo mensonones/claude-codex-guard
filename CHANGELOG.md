@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.4.2] - 2026-09-23
+
+- **Poda de Turnos Antigos na Responses API do OpenAI/Codex**:
+  - Implementado agrupamento de turnos e poda inteligente de saídas antigas de ferramentas em `optimizeOpenAIResponses` (`wire_api = "responses"`).
+  - Preserva os últimos `keepRecentToolTurns` turnos intactos e compacta turnos anteriores longos (> 300 caracteres) com sumário das 3 primeiras linhas e marcador neutro.
+  - Agrupa chamadas e saídas paralelas de ferramentas dentro do mesmo turno sem podas prematuras.
+  - Disparo de Circuit Breaker baseado em turnos consecutivos de ferramentas com aviso direcionado a instruções ou mensagens de sistema/desenvolvedor.
+- **Conexões Persistentes HTTP/HTTPS (`keepAlive`)**:
+  - Adicionado pool com `keepAlive: true`, `keepAliveMsecs: 10000` e `timeout: 300000` (5 minutos) para conexões upstream (`chatgpt.com`, `api.anthropic.com`, `api.openai.com`), prevenindo erros de socket fechado ou `read ETIMEDOUT` durante respostas longas de raciocínio profundo (`gpt-6-astra`, `gpt-5.6-luna`).
+- **Sincronização Automática para Codex CLI**:
+  - Sincronização do provedor `claude-codex-guard` diretamente em `~/.codex/config.toml` (com backup automático), garantindo que comandos `codex` executados no terminal passem automaticamente pelo proxy com proteção total sem necessidade de wrappers manuais.
+
 ## [1.4.1] - 2026-09-23
 
 - **Resiliência do Indicador de Bandeja (System Tray) na Inicialização**:

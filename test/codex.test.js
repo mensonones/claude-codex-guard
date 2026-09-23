@@ -82,6 +82,82 @@ test('TokenOptimizer truncates OpenAI Responses function_call_output items', () 
   assert.ok(payload.input[2].output.length <= 300);
 });
 
+test('TokenOptimizer prunes older OpenAI Responses tool turns aggressively while keeping recent intact', () => {
+  const optimizer = new TokenOptimizer({
+    ...defaultConfig,
+    maxToolResultChars: 2000,
+    keepRecentToolTurns: 1
+  });
+
+  const payload = {
+    model: 'gpt-5.6-luna',
+    input: [
+      { role: 'user', content: 'start task' },
+      // Turn 1 (Old)
+      { type: 'function_call', call_id: 'call_1', name: 'bash', arguments: '{}' },
+      { type: 'function_call_output', call_id: 'call_1', output: 'Header 1\nHeader 2\nHeader 3\n' + 'Old details '.repeat(100) },
+      // Turn 2 (Recent)
+      { type: 'function_call', call_id: 'call_2', name: 'bash', arguments: '{}' },
+      { type: 'function_call_output', call_id: 'call_2', output: 'Recent preserved: ' + 'Short '.repeat(5) }
+    ]
+  };
+
+  const res = optimizer.optimize(payload, 'openai');
+  assert.equal(res.modified, true);
+  assert.equal(res.stats.prunedToolResults, 1);
+
+  // Turn 1 should be pruned
+  assert.ok(payload.input[2].output.includes('older output truncated:'));
+
+  // Turn 2 should remain intact
+  assert.ok(payload.input[4].output.includes('Recent preserved:'));
+});
+
+test('TokenOptimizer keeps parallel function_call_output from the same Responses turn intact', () => {
+  const optimizer = new TokenOptimizer({
+    ...defaultConfig,
+    keepRecentToolTurns: 1,
+    maxToolResultChars: 2000
+  });
+
+  const payload = {
+    model: 'gpt-5.6-luna',
+    input: [
+      { role: 'user', content: 'run checks' },
+      { type: 'function_call', call_id: 'call_a', name: 'bash', arguments: '{}' },
+      { type: 'function_call', call_id: 'call_b', name: 'bash', arguments: '{}' },
+      { type: 'function_call_output', call_id: 'call_a', output: 'A'.repeat(700) },
+      { type: 'function_call_output', call_id: 'call_b', output: 'B'.repeat(700) }
+    ]
+  };
+
+  const result = optimizer.optimize(payload, 'openai');
+  assert.equal(result.stats.prunedToolResults, 0);
+  assert.equal(payload.input[3].output, 'A'.repeat(700));
+  assert.equal(payload.input[4].output, 'B'.repeat(700));
+});
+
+test('TokenOptimizer triggers circuit breaker in OpenAI Responses when consecutive loops exceed threshold', () => {
+  const optimizer = new TokenOptimizer({
+    ...defaultConfig,
+    maxConsecutiveToolCalls: 3
+  });
+
+  const items = [{ role: 'user', content: 'fix bugs' }];
+  for (let i = 1; i <= 4; i++) {
+    items.push({ type: 'function_call', call_id: `call_${i}`, name: 'bash', arguments: '{}' });
+    items.push({ type: 'function_call_output', call_id: `call_${i}`, output: `Result of step ${i}` });
+  }
+
+  const payload = { model: 'gpt-5.6-luna', instructions: 'You are an agent.', input: items };
+  const res = optimizer.optimize(payload, 'openai');
+
+  assert.equal(res.circuitBreakerActivated, true);
+  assert.ok(payload.instructions.includes('System Alert: You have performed 4 consecutive automated tool actions'));
+  // Tool output itself must not be altered with instructions
+  assert.equal(payload.input.find(it => it.call_id === 'call_4' && it.type === 'function_call_output').output, 'Result of step 4');
+});
+
 test('TokenOptimizer keeps parallel tool results from the same OpenAI turn intact', () => {
   const optimizer = new TokenOptimizer({ ...defaultConfig, keepRecentToolTurns: 1, maxToolResultChars: 2000 });
   const payload = {
