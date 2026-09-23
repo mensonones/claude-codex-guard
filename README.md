@@ -4,7 +4,8 @@
 
 Desenvolvido em **Node.js** puro (sem dependências externas) e testado em **Ubuntu Linux** (GNOME Shell / Wayland / X11), o projeto otimiza requisições JSON de Anthropic Messages, OpenAI Chat Completions/Responses e Codex `/backend-api/`, além de bloquear telemetria localmente.
 
-Versão atual: **1.4.3**.
+Versão atual: **1.4.4**.
+
 
 ---
 
