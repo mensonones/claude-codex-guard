@@ -1,6 +1,14 @@
 # Changelog
 
-## [1.4.3] - 2026-09-23
+## [1.4.4] - 2026-09-23
+
+- **Correção: erro "model output must contain either output text or tool calls"**:
+  - O Circuit Breaker pode fazer com que uma sessão do Codex registre uma resposta anterior do assistente com `output: []` vazio no histórico. Na próxima requisição, a API da OpenAI/Codex rejeita o payload com esse erro 400.
+  - `optimizer.js` — `optimizeOpenAIResponses` agora varre e remove automaticamente itens do tipo `message`/`assistant` com `output: []` vazio antes de processar o histórico.
+  - `proxy.js` — quando o upstream retorna 400 com a mensagem específica `model output must contain`, o proxy intercepta a resposta, loga o evento e retorna uma resposta sintética válida (com explicação amigável ao usuário), evitando que o Codex quebre a sessão.
+  - 2 novos testes adicionados (42 total, 100% green).
+
+
 
 - **Melhorias na Visualização e Feed da Dashboard Web**:
   - **Correção da Ordem Cronológica do Feed**: Eliminada a inversão que empurrava as requisições mais recentes (como as do Codex hoje) para o final do scroll e deixava chamadas de dias anteriores no topo. Agora as requisições mais recentes aparecem sempre no topo do feed, tanto na carga inicial quanto em tempo real via SSE.

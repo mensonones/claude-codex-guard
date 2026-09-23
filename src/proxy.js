@@ -526,8 +526,49 @@ export function createProxyServer(userConfig = {}) {
         };
 
         const clientReq = (targetPort === 443 ? https : http).request(targetOptions, targetRes => {
-          res.writeHead(targetRes.statusCode || 200, prepareResponseHeaders(targetRes.headers));
-          targetRes.pipe(res);
+          // Intercept 400 errors from the Responses API that happen when a previous
+          // assistant turn had an empty output array. Return a synthetic valid response
+          // so the client (Codex) can continue instead of crashing.
+          const isResponsesAPI = url.includes('/responses') || url.includes('/backend-api/');
+          if (targetRes.statusCode === 400 && isResponsesAPI) {
+            const errChunks = [];
+            targetRes.on('data', c => errChunks.push(c));
+            targetRes.on('end', () => {
+              const errBody = Buffer.concat(errChunks).toString('utf-8');
+              const isEmptyOutputError = errBody.includes('model output must contain') ||
+                errBody.includes('output text or tool calls');
+              if (isEmptyOutputError) {
+                console.warn('[claude-codex-guard] ⚠️  Interceptando erro "model output must contain" da API — retornando resposta sintética para evitar crash do cliente.');
+                const syntheticResponse = {
+                  id: `guard-synthetic-${Date.now()}`,
+                  object: 'response',
+                  status: 'completed',
+                  output: [{
+                    type: 'message',
+                    id: `msg-synthetic-${Date.now()}`,
+                    role: 'assistant',
+                    content: [{
+                      type: 'output_text',
+                      text: '[Claude-Codex-Guard] A sessão anterior foi interrompida pelo circuit breaker. Por favor, descreva o que precisa fazer a seguir para que eu possa continuar.'
+                    }],
+                    status: 'completed'
+                  }],
+                  usage: { input_tokens: 0, output_tokens: 20 }
+                };
+                res.writeHead(200, {
+                  'content-type': 'application/json',
+                  'x-claude-codex-guard-synthetic': 'true'
+                });
+                res.end(JSON.stringify(syntheticResponse));
+              } else {
+                res.writeHead(targetRes.statusCode, prepareResponseHeaders(targetRes.headers));
+                res.end(errBody);
+              }
+            });
+          } else {
+            res.writeHead(targetRes.statusCode || 200, prepareResponseHeaders(targetRes.headers));
+            targetRes.pipe(res);
+          }
         });
 
         res.on('close', () => {

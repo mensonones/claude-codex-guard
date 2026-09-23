@@ -166,6 +166,22 @@ export class TokenOptimizer {
   }
 
   optimizeOpenAIResponses(payload) {
+    // Remove invalid assistant/message items with empty output arrays that cause
+    // "model output must contain either output text or tool calls" API errors.
+    if (Array.isArray(payload.input)) {
+      for (let i = payload.input.length - 1; i >= 0; i--) {
+        const item = payload.input[i];
+        if (
+          item &&
+          (item.type === 'message' || item.role === 'assistant') &&
+          Array.isArray(item.output) &&
+          item.output.length === 0
+        ) {
+          payload.input.splice(i, 1);
+        }
+      }
+    }
+
     const items = Array.isArray(payload.input) ? payload.input : [];
     const toolGroups = [];
     let activeGroup = null;

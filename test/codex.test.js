@@ -617,3 +617,87 @@ test('Dashboard HTML includes sessionList and filterTabs', async () => {
   assert.ok(html.includes('setAgentFilter'));
 });
 
+test('optimizeOpenAIResponses removes assistant items with empty output arrays', () => {
+  const optimizer = new TokenOptimizer(defaultConfig);
+  const payload = {
+    model: 'codex-mini',
+    input: [
+      { role: 'user', content: 'do something' },
+      { type: 'function_call', name: 'bash', arguments: '{}', call_id: 'c1' },
+      { type: 'function_call_output', call_id: 'c1', output: 'ok' },
+      // Invalid item that triggers "model output must contain" API error
+      { type: 'message', role: 'assistant', output: [] },
+      { type: 'function_call', name: 'bash', arguments: '{}', call_id: 'c2' },
+      { type: 'function_call_output', call_id: 'c2', output: 'ok2' },
+    ]
+  };
+
+  optimizer.optimize(payload, 'openai');
+  // The invalid assistant item should have been removed
+  const hasEmptyOutput = payload.input.some(
+    item => item && Array.isArray(item.output) && item.output.length === 0
+  );
+  assert.equal(hasEmptyOutput, false, 'Items with empty output[] must be removed');
+  // The valid items should remain
+  const fcCount = payload.input.filter(i => i.type === 'function_call').length;
+  assert.equal(fcCount, 2);
+});
+
+test('Proxy intercepts 400 "model output must contain" error and returns synthetic response', async () => {
+  // Spin up a mock upstream that always returns 400 with the specific error
+  const mockUpstream = http.createServer((_req, res) => {
+    const body = JSON.stringify({
+      error: { type: 'invalid_request_error', message: 'model output must contain either output text or tool calls, these cannot both be empty' }
+    });
+    res.writeHead(400, { 'content-type': 'application/json', 'content-length': Buffer.byteLength(body) });
+    res.end(body);
+  });
+  await new Promise(resolve => mockUpstream.listen(0, '127.0.0.1', resolve));
+  const upstreamPort = mockUpstream.address().port;
+
+  const { server, db } = createProxyServer({
+    port: 0,
+    host: '127.0.0.1',
+    maxToolResultChars: 16000,
+    keepRecentToolTurns: 4,
+    maxConsecutiveToolCalls: 20,
+    dbPath: ':memory:'
+  });
+  const port = await new Promise(resolve => server.listen(0, '127.0.0.1', () => resolve(server.address().port)));
+
+  try {
+    const result = await new Promise((resolve, reject) => {
+      const reqBody = JSON.stringify({ model: 'codex-mini', input: [{ role: 'user', content: 'hi' }] });
+      const req = http.request({
+        hostname: '127.0.0.1',
+        port,
+        path: '/v1/responses',
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'content-length': Buffer.byteLength(reqBody),
+          // Force routing to our mock upstream instead of api.openai.com
+          'x-target-host': '127.0.0.1',
+          'x-target-port': String(upstreamPort)
+        }
+      }, res => {
+        let body = '';
+        res.on('data', c => body += c);
+        res.on('end', () => resolve({ statusCode: res.statusCode, headers: res.headers, body: JSON.parse(body) }));
+      });
+      req.on('error', reject);
+      req.end(reqBody);
+    });
+
+    assert.equal(result.statusCode, 200, 'Proxy must return 200 for the synthetic response');
+    assert.equal(result.headers['x-claude-codex-guard-synthetic'], 'true');
+    assert.ok(Array.isArray(result.body.output), 'Synthetic response must have output array');
+    assert.ok(result.body.output.length > 0, 'Synthetic output must not be empty');
+    assert.equal(result.body.output[0].role, 'assistant');
+  } finally {
+    server.close();
+    db.close();
+    mockUpstream.close();
+  }
+});
+
