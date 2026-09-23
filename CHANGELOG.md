@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.4.3] - 2026-09-23
+
+- **Melhorias na Visualização e Feed da Dashboard Web**:
+  - **Correção da Ordem Cronológica do Feed**: Eliminada a inversão que empurrava as requisições mais recentes (como as do Codex hoje) para o final do scroll e deixava chamadas de dias anteriores no topo. Agora as requisições mais recentes aparecem sempre no topo do feed, tanto na carga inicial quanto em tempo real via SSE.
+  - **Novo Painel de "Sessões Recentes"**: Adicionada listagem dinâmica de sessões com identificação do cliente (`Codex Desktop`, `Claude Desktop`, `Codex CLI`, `Claude Code`), projeto associado, contagem de requisições, tokens poupados e horário da última atividade.
+  - **Filtros por Agente e Projeto**: Abas de filtro instantâneo no feed (`Todos`, `Codex`, `Claude`) e capacidade de clicar em uma sessão ou projeto para filtrar os eventos.
+  - **Identificação Clara de Requisições Protegidas**: Chamadas que não necessitaram de cortes imediatos agora exibem explicitamente `Requisição Protegida (sem corte necessário)` e o badge com o modelo (`gpt-6-astra`, `gpt-5.6-terra`, etc.), evidenciando a interceptação e monitoramento ativo pelo proxy.
+  - **Novos Endpoints de Sessão**: Adicionado `/claude-codex-guard/sessions` e incluído array de sessões em `/claude-codex-guard/stats`.
+
 ## [1.4.2] - 2026-09-23
 
 - **Poda de Turnos Antigos na Responses API do OpenAI/Codex**:

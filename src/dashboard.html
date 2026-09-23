@@ -543,6 +543,43 @@
       gap: 8px;
     }
 
+    .feed-controls {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .filter-tabs {
+      display: inline-flex;
+      background: var(--bg-hover);
+      border: 1px solid var(--card-border);
+      border-radius: 8px;
+      padding: 2px;
+      gap: 2px;
+    }
+
+    .filter-tab {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      font-size: 11px;
+      font-weight: 600;
+      padding: 4px 10px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .filter-tab:hover {
+      color: var(--ink-strong);
+    }
+
+    .filter-tab.active {
+      background: var(--card-bg);
+      color: var(--primary);
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    }
+
     /* Activity Feed */
     .feed-container {
       display: flex;
@@ -1153,7 +1190,14 @@
     <section class="panel feed-panel" id="activity">
       <div class="panel-header">
         <div><span class="section-kicker">Eventos recentes</span><h2>Atividade ao vivo <span class="badge" id="feedCount">0 eventos</span></h2></div>
-        <button class="action-button" onclick="clearFeedList()">Limpar feed</button>
+        <div class="feed-controls">
+          <div class="filter-tabs" role="tablist" aria-label="Filtrar eventos por agente">
+            <button class="filter-tab active" data-filter="all" onclick="setAgentFilter('all')">Todos</button>
+            <button class="filter-tab" data-filter="codex" onclick="setAgentFilter('codex')">Codex</button>
+            <button class="filter-tab" data-filter="claude" onclick="setAgentFilter('claude')">Claude</button>
+          </div>
+          <button class="action-button" onclick="clearFeedList()">Limpar</button>
+        </div>
       </div>
 
       <div class="feed-container" id="feedList">
@@ -1184,6 +1228,11 @@
       <div class="panel-header panel-header-spaced" id="agents"><div><span class="section-kicker">Origem</span><h2>Por agente</h2></div></div>
       <div class="project-list" id="agentList">
         <div class="empty-state">Nenhum agente registrado ainda.</div>
+      </div>
+
+      <div class="panel-header panel-header-spaced" id="sessions"><div><span class="section-kicker">Histórico</span><h2>Sessões recentes</h2></div></div>
+      <div class="project-list" id="sessionList">
+        <div class="empty-state">Nenhuma sessão registrada ainda.</div>
       </div>
 
       <div class="panel-header panel-header-spaced" id="telemetry">
@@ -1466,7 +1515,8 @@
           const recentList = await recentRes.json();
           if (Array.isArray(recentList) && recentList.length > 0) {
             emptyFeed.style.display = 'none';
-            for (const item of recentList.reverse()) {
+            // recentList comes sorted by id DESC (newest first). Appending in this order places the newest at the top!
+            for (const item of recentList) {
               addFeedItem({
                 type: 'request',
                 id: item.id,
@@ -1666,6 +1716,96 @@
       } else {
         document.getElementById('agentList').innerHTML = '<div class="empty-state">Nenhum agente registrado ainda.</div>';
       }
+
+      // Update Sessions breakdown
+      if (Array.isArray(data.sessions) && data.sessions.length > 0) {
+        const sessionListEl = document.getElementById('sessionList');
+        if (sessionListEl) {
+          sessionListEl.innerHTML = '';
+          const clientMeta = {
+            'desktop': { name: 'Claude Desktop', badge: 'badge-claude' },
+            'cli': { name: 'Claude Code', badge: 'badge-claude' },
+            'codex-cli': { name: 'Codex CLI', badge: 'badge-codex' },
+            'codex-desktop': { name: 'Codex Desktop', badge: 'badge-codex' }
+          };
+
+          for (const s of data.sessions) {
+            const meta = clientMeta[s.clientType] || { name: s.clientType, badge: 'badge-project' };
+            const timeStr = formatDashboardTime(s.updatedAt || s.startedAt);
+            const row = document.createElement('div');
+            row.className = 'project-row';
+            row.style.cursor = 'pointer';
+            row.title = `Clique para filtrar o feed pelo projeto '${s.projectName}'`;
+            row.onclick = () => setFeedProjectFilter(s.projectName);
+
+            const hasSaved = Number(s.tokensSaved) > 0;
+            row.innerHTML = `
+              <div class="project-row-header">
+                <div style="display:flex; align-items:center; gap:6px;">
+                  <span class="feed-badge ${meta.badge}" style="font-size:10px; padding:2px 6px;">${escapeHtml(meta.name)}</span>
+                  <strong style="font-size:13px;">${escapeHtml(s.projectName)}</strong>
+                </div>
+                <span style="color:${hasSaved ? 'var(--emerald)' : 'var(--text-muted)'}; font-weight:600; font-size:12px;">~${escapeHtml(Number(s.tokensSaved).toLocaleString())} tk</span>
+              </div>
+              <div style="font-size: 11px; color: var(--text-muted); display:flex; justify-content:space-between; margin-top:2px;">
+                <span>${escapeHtml(s.requestCount)} requisições</span>
+                <span>${escapeHtml(timeStr)}</span>
+              </div>
+            `;
+            sessionListEl.appendChild(row);
+          }
+        }
+      } else {
+        const sessionListEl = document.getElementById('sessionList');
+        if (sessionListEl) sessionListEl.innerHTML = '<div class="empty-state">Nenhuma sessão registrada ainda.</div>';
+      }
+    }
+
+    let currentAgentFilter = 'all';
+    let currentProjectFilter = null;
+
+    function setAgentFilter(filter) {
+      currentAgentFilter = filter;
+      document.querySelectorAll('.filter-tab').forEach(tab => {
+        tab.classList.toggle('active', tab.dataset.filter === filter);
+      });
+      applyFeedFilters();
+    }
+
+    function setFeedProjectFilter(projectName) {
+      if (currentProjectFilter === projectName) {
+        currentProjectFilter = null;
+      } else {
+        currentProjectFilter = projectName;
+      }
+      applyFeedFilters();
+    }
+
+    function applyFeedFilters() {
+      const items = feedList.querySelectorAll('.feed-item');
+      let visibleCount = 0;
+      for (const el of items) {
+        const itemClient = el.dataset.client || '';
+        const itemProject = el.dataset.project || '';
+        const itemModel = el.dataset.model || '';
+
+        let matchAgent = true;
+        if (currentAgentFilter === 'codex') {
+          matchAgent = itemClient.includes('codex') || itemModel.startsWith('gpt-');
+        } else if (currentAgentFilter === 'claude') {
+          matchAgent = !itemClient.includes('codex') && !itemModel.startsWith('gpt-');
+        }
+
+        let matchProject = true;
+        if (currentProjectFilter) {
+          matchProject = itemProject.toLowerCase() === currentProjectFilter.toLowerCase();
+        }
+
+        const visible = matchAgent && matchProject;
+        el.style.display = visible ? 'flex' : 'none';
+        if (visible) visibleCount++;
+      }
+      document.getElementById('feedCount').textContent = `${visibleCount} eventos`;
     }
 
     function getAgentBadge(data) {
@@ -1679,12 +1819,12 @@
         model.startsWith('o4')
       ) {
         return {
-          name: client === 'codex-desktop' ? 'Codex App' : 'Codex',
+          name: client === 'codex-desktop' ? 'Codex Desktop' : 'Codex CLI',
           cls: 'badge-codex'
         };
       }
       return {
-        name: client === 'desktop' ? 'Claude App' : 'Claude',
+        name: client === 'desktop' ? 'Claude Desktop' : 'Claude Code',
         cls: 'badge-claude'
       };
     }
@@ -1696,6 +1836,9 @@
 
       const item = document.createElement('div');
       item.className = 'feed-item';
+      item.dataset.client = (data.clientType || '').toLowerCase();
+      item.dataset.project = (data.project || 'Geral').toLowerCase();
+      item.dataset.model = (data.model || '').toLowerCase();
 
       const timeStr = formatDashboardTime(data.timestamp);
 
@@ -1726,7 +1869,7 @@
           ? `CIRCUIT BREAKER ATIVADO (Limite de loops atingido)`
           : hasSaved
             ? `Poupou ~${data.savedTokens.toLocaleString()} tokens`
-            : `→ Requisição Direta`;
+            : `Requisição Protegida (sem corte necessário)`;
 
         const metaText = data.model
           ? `Modelo: ${data.model} | Payload: ${(data.origChars/1000).toFixed(1)}k → ${(data.optChars/1000).toFixed(1)}k chars`
@@ -1749,6 +1892,19 @@
           </div>
         `;
       }
+
+      // Check current filters
+      let matchAgent = true;
+      if (currentAgentFilter === 'codex') {
+        matchAgent = item.dataset.client.includes('codex') || item.dataset.model.startsWith('gpt-');
+      } else if (currentAgentFilter === 'claude') {
+        matchAgent = !item.dataset.client.includes('codex') && !item.dataset.model.startsWith('gpt-');
+      }
+      let matchProject = true;
+      if (currentProjectFilter) {
+        matchProject = item.dataset.project === currentProjectFilter.toLowerCase();
+      }
+      item.style.display = (matchAgent && matchProject) ? 'flex' : 'none';
 
       if (prepend && feedList.firstChild) {
         feedList.insertBefore(item, feedList.firstChild);

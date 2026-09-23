@@ -302,6 +302,19 @@ export function createProxyServer(userConfig = {}) {
       return;
     }
 
+    // Sessions list endpoint for dashboard hydration
+    if (method === 'GET' && url === '/claude-codex-guard/sessions') {
+      res.writeHead(200, {
+        'Content-Type': 'application/json'
+      });
+      try {
+        res.end(JSON.stringify(db.getRecentSessions(25)));
+      } catch (err) {
+        res.end(JSON.stringify([]));
+      }
+      return;
+    }
+
     // Local health, live session and SQLite persistent stats endpoint
     if (url === '/claude-codex-guard/stats' || url === '/_guard/stats') {
       res.writeHead(200, { 'content-type': 'application/json' });
@@ -313,6 +326,7 @@ export function createProxyServer(userConfig = {}) {
         allTime: db.getOverallStats(),
         projects: db.getProjectStats(),
         clients: db.getClientStats(),
+        sessions: db.getRecentSessions(15),
         telemetrySummary: db.getTelemetryStats()
       }, null, 2));
       return;

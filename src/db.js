@@ -340,6 +340,42 @@ export class GuardDB {
     return this.db.prepare(sql).all(...params);
   }
 
+  getRecentSessions(limit = 15) {
+    const sql = `
+      SELECT 
+        s.id,
+        s.session_uuid,
+        s.client_type,
+        s.project_name,
+        s.project_path,
+        COUNT(r.id) as request_count,
+        COALESCE(SUM(r.saved_tokens), 0) as tokens_saved,
+        COALESCE(SUM(r.saved_chars), 0) as chars_saved,
+        COALESCE(SUM(r.original_chars), 0) as orig_chars,
+        s.started_at,
+        s.updated_at
+      FROM sessions s
+      LEFT JOIN requests r ON r.session_uuid = s.session_uuid
+      GROUP BY s.session_uuid
+      ORDER BY s.id DESC
+      LIMIT ?
+    `;
+    const rows = this.db.prepare(sql).all(limit);
+    return rows.map(r => ({
+      id: r.id,
+      sessionUuid: r.session_uuid,
+      clientType: r.client_type,
+      projectName: r.project_name,
+      projectPath: r.project_path,
+      requestCount: Number(r.request_count || 0),
+      tokensSaved: Number(r.tokens_saved || 0),
+      charsSaved: Number(r.chars_saved || 0),
+      origChars: Number(r.orig_chars || 0),
+      startedAt: r.started_at,
+      updatedAt: r.updated_at
+    }));
+  }
+
   exportData(format = 'json', filterProject = null) {
     let sql = `
       SELECT 

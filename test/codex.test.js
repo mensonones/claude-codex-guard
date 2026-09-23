@@ -564,3 +564,56 @@ test('Proxy handles OPTIONS CORS preflight locally with 204 No Content', async (
   }
 });
 
+test('Proxy exposes sessions in stats and /claude-codex-guard/sessions', async () => {
+  const { server, db } = createProxyServer({ port: 0, dbPath: ':memory:' });
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  const port = server.address().port;
+
+  try {
+    const sUuid = db.createSession('codex-desktop', 'test-proj', '/tmp/test');
+    db.logRequest({
+      sessionUuid: sUuid,
+      projectName: 'test-proj',
+      model: 'gpt-6-astra',
+      originalChars: 1000,
+      optimizedChars: 800,
+      savedChars: 200,
+      savedTokens: 52
+    });
+
+    const sessions = db.getRecentSessions(10);
+    assert.ok(sessions.length >= 1);
+    assert.equal(sessions[0].clientType, 'codex-desktop');
+    assert.equal(sessions[0].projectName, 'test-proj');
+    assert.equal(sessions[0].requestCount, 1);
+    assert.equal(sessions[0].tokensSaved, 52);
+
+    const res = await new Promise((resolve, reject) => {
+      http.get(`http://127.0.0.1:${port}/claude-codex-guard/sessions`, response => {
+        let body = '';
+        response.on('data', chunk => body += chunk);
+        response.on('end', () => resolve({ statusCode: response.statusCode, data: JSON.parse(body) }));
+      }).on('error', reject);
+    });
+
+    assert.equal(res.statusCode, 200);
+    assert.ok(Array.isArray(res.data));
+    assert.ok(res.data.some(s => s.clientType === 'codex-desktop' && s.projectName === 'test-proj'));
+  } finally {
+    server.close();
+    db.close();
+  }
+});
+
+test('Dashboard HTML includes sessionList and filterTabs', async () => {
+  const fs = await import('node:fs');
+  const path = await import('node:path');
+  const { fileURLToPath } = await import('node:url');
+  const __dirname = path.dirname(fileURLToPath(import.meta.url));
+  const html = fs.readFileSync(path.resolve(__dirname, '../src/dashboard.html'), 'utf-8');
+  assert.ok(html.includes('id="sessionList"'));
+  assert.ok(html.includes('Sessões recentes'));
+  assert.ok(html.includes('filter-tabs'));
+  assert.ok(html.includes('setAgentFilter'));
+});
+
