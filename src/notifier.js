@@ -75,24 +75,68 @@ export function notifyCircuitBreaker(projectName, loops) {
  */
 export function startTrayIndicator(port, parentPid = process.pid) {
   if (process.env.CLAUDE_CODEX_GUARD_NO_TRAY === '1') return null;
-  if (process.platform !== 'linux' && !process.env.DISPLAY && !process.env.WAYLAND_DISPLAY) return null;
+  if (process.platform !== 'linux') return null;
 
   const trayScript = path.resolve(projectRoot, 'scripts/claude-codex-guard-tray.py');
   if (!fs.existsSync(trayScript)) return null;
 
-  try {
-    const child = spawn('python3', [
-      trayScript,
-      '--port', String(port),
-      '--parent-pid', String(parentPid)
-    ], {
-      detached: true,
-      stdio: 'ignore'
-    });
-    child.on('error', () => {});
-    child.unref();
-    return child;
-  } catch {
-    return null;
-  }
+  const uid = typeof process.getuid === 'function' ? process.getuid() : 1000;
+  const rawDbus = process.env.DBUS_SESSION_BUS_ADDRESS || `unix:path=/run/user/${uid}/bus`;
+  const cleanDbus = rawDbus.replace(/,guid=[a-f0-9]+/gi, '');
+
+  const env = {
+    ...process.env,
+    DISPLAY: process.env.DISPLAY || ':0',
+    WAYLAND_DISPLAY: process.env.WAYLAND_DISPLAY || 'wayland-0',
+    XDG_RUNTIME_DIR: process.env.XDG_RUNTIME_DIR || `/run/user/${uid}`,
+    DBUS_SESSION_BUS_ADDRESS: cleanDbus
+  };
+
+  let child = null;
+  let retryCount = 0;
+  let isShuttingDown = false;
+
+  const launch = () => {
+    if (isShuttingDown) return;
+    try {
+      child = spawn('python3', [
+        trayScript,
+        '--port', String(port),
+        '--parent-pid', String(parentPid)
+      ], {
+        detached: true,
+        env,
+        stdio: ['ignore', 'inherit', 'inherit']
+      });
+
+      child.on('error', err => {
+        console.warn(`[claude-codex-guard] Aviso: Indicador de bandeja não pôde ser iniciado: ${err.message}`);
+      });
+
+      child.on('exit', (code, signal) => {
+        child = null;
+        if (isShuttingDown || code === 0 || signal === 'SIGTERM' || signal === 'SIGINT') return;
+        if (retryCount < 5) {
+          retryCount++;
+          const delay = Math.min(retryCount * 2000, 10000);
+          setTimeout(launch, delay).unref();
+        }
+      });
+
+      child.unref();
+    } catch {
+      // Ignorado se python3 não estiver disponível
+    }
+  };
+
+  launch();
+
+  return {
+    kill: (sig = 'SIGTERM') => {
+      isShuttingDown = true;
+      if (child) {
+        try { child.kill(sig); } catch {}
+      }
+    }
+  };
 }

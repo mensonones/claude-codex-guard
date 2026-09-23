@@ -860,10 +860,13 @@ else if (args[0] === 'autostart') {
     fs.mkdirSync(autostartDir, { recursive: true });
 
     const uid = typeof process.getuid === 'function' ? process.getuid() : 1000;
+    const rawDbus = process.env.DBUS_SESSION_BUS_ADDRESS || `unix:path=/run/user/${uid}/bus`;
+    const cleanDbus = rawDbus.replace(/,guid=[a-f0-9]+/gi, '');
     const serviceContent = `[Unit]
 Description=Claude-Codex-Guard Local Proxy and Token Optimizer
 Documentation=https://github.com/mensonones/claude-codex-guard
-After=network.target
+After=network.target dbus.socket
+Wants=dbus.socket
 
 [Service]
 Type=simple
@@ -875,7 +878,7 @@ Environment=PATH=${path.dirname(nodeBin)}:/usr/local/bin:/usr/bin:/bin
 Environment=CLAUDE_CODEX_GUARD_PORT=${config.port}
 Environment=DISPLAY=${process.env.DISPLAY || ':0'}
 Environment=WAYLAND_DISPLAY=${process.env.WAYLAND_DISPLAY || 'wayland-0'}
-Environment=DBUS_SESSION_BUS_ADDRESS=${process.env.DBUS_SESSION_BUS_ADDRESS || ''}
+Environment=DBUS_SESSION_BUS_ADDRESS=${cleanDbus}
 Environment=XDG_RUNTIME_DIR=${process.env.XDG_RUNTIME_DIR || `/run/user/${uid}`}
 
 [Install]

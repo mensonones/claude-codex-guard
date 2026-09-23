@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.4.1] - 2026-09-23
+
+- **Resiliência do Indicador de Bandeja (System Tray) na Inicialização**:
+  - Corrigido problema em que o ícone na bandeja não aparecia após o boot do sistema porque o `systemd --user` iniciava o serviço antes do GNOME Shell registrar o `StatusNotifierWatcher`.
+  - Adicionada espera ativa e reconexão automática via sinais D-Bus `NameOwnerChanged` e temporizador GLib no script Python da bandeja, permitindo que ele se registre no momento em que o ambiente gráfico estiver pronto ou se o GNOME Shell for reiniciado.
+  - Implementada supervisão de processo e reinício automático do indicador no Node.js (`src/notifier.js`).
+  - Corrigida a geração da unidade `claude-codex-guard.service` para incluir dependência de `dbus.socket` e remover valores voláteis de GUID do `DBUS_SESSION_BUS_ADDRESS`.
+
+
 ## [1.4.0] - 2026-09-22
 
 - **Correção de Falso-Positivo de Injeção de Prompt**:

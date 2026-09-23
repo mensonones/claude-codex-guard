@@ -10,6 +10,7 @@ import signal
 import subprocess
 import sqlite3
 import argparse
+import time
 
 try:
     import dbus
@@ -84,7 +85,7 @@ class DBusMenu(dbus.service.Object):
                     pass
             elif item_id == 5:
                 if self.on_quit:
-                    self.on_quit()
+                    self.on_quit(kill_parent=True)
 
     @dbus.service.method('com.canonical.dbusmenu', in_signature='i', out_signature='b')
     def AboutToShow(self, item_id):
@@ -155,17 +156,22 @@ def main():
     args = parser.parse_args()
 
     DBusGMainLoop(set_as_default=True)
-    try:
-        bus = dbus.SessionBus()
-    except Exception as e:
-        print(f"[claude-codex-guard-tray] Falha ao conectar ao D-Bus de sessão: {e}", file=sys.stderr)
-        sys.exit(1)
+    bus = None
+    for attempt in range(15):
+        try:
+            bus = dbus.SessionBus()
+            break
+        except Exception as e:
+            if attempt == 14:
+                print(f"[claude-codex-guard-tray] Falha ao conectar ao D-Bus de sessão: {e}", file=sys.stderr)
+                sys.exit(1)
+            time.sleep(1)
 
     loop = GLib.MainLoop()
 
-    def on_quit():
+    def on_quit(kill_parent=False):
         print("[claude-codex-guard-tray] Encerrando indicador da bandeja...")
-        if args.parent_pid:
+        if kill_parent and args.parent_pid:
             try:
                 os.kill(args.parent_pid, signal.SIGTERM)
             except Exception:
@@ -175,20 +181,50 @@ def main():
     pid = os.getpid()
     service_name = f'org.kde.StatusNotifierItem-claude-codex-guard-{pid}'
 
-    try:
-        bus_name = dbus.service.BusName(service_name, bus)
-        menu = DBusMenu(bus_name, args.port, on_quit)
-        sni = StatusNotifierItem(bus_name, args.port, on_quit)
+    bus_name = dbus.service.BusName(service_name, bus)
+    menu = DBusMenu(bus_name, args.port, on_quit)
+    sni = StatusNotifierItem(bus_name, args.port, on_quit)
 
-        watcher = bus.get_object('org.kde.StatusNotifierWatcher', '/StatusNotifierWatcher')
-        watcher.RegisterStatusNotifierItem(service_name, dbus_interface='org.kde.StatusNotifierWatcher')
-        print(f"[claude-codex-guard-tray] Indicador registrado com sucesso na porta {args.port}!")
-    except Exception as e:
-        print(f"[claude-codex-guard-tray] Aviso: Não foi possível registrar o StatusNotifierItem: {e}", file=sys.stderr)
-        sys.exit(1)
+    registered = [False]
+
+    def try_register():
+        if registered[0]:
+            return False
+        try:
+            watcher = bus.get_object('org.kde.StatusNotifierWatcher', '/StatusNotifierWatcher')
+            watcher.RegisterStatusNotifierItem(service_name, dbus_interface='org.kde.StatusNotifierWatcher')
+            registered[0] = True
+            print(f"[claude-codex-guard-tray] Indicador registrado com sucesso na porta {args.port}!")
+            return False
+        except Exception:
+            # Watcher not ready yet (common during graphical session startup)
+            return True
+
+    def on_name_owner_changed(name, old_owner, new_owner):
+        if name == 'org.kde.StatusNotifierWatcher':
+            if new_owner:
+                registered[0] = False
+                if try_register():
+                    GLib.timeout_add_seconds(2, try_register)
+            else:
+                registered[0] = False
+
+    try:
+        bus.add_signal_receiver(
+            on_name_owner_changed,
+            signal_name='NameOwnerChanged',
+            dbus_interface='org.freedesktop.DBus',
+            bus_name='org.freedesktop.DBus',
+            path='/org/freedesktop/DBus'
+        )
+    except Exception:
+        pass
+
+    if try_register():
+        GLib.timeout_add_seconds(2, try_register)
 
     def handle_signal(sig, frame):
-        on_quit()
+        on_quit(kill_parent=False)
 
     signal.signal(signal.SIGINT, handle_signal)
     signal.signal(signal.SIGTERM, handle_signal)
