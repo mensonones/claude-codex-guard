@@ -467,6 +467,13 @@
       cursor: not-allowed;
     }
 
+    .action-button.active {
+      background-color: var(--primary-subtle);
+      border-color: var(--primary);
+      color: var(--primary);
+      font-weight: 600;
+    }
+
     .kpi-sub {
       font-size: 12px;
       color: var(--text-muted);
@@ -1196,6 +1203,7 @@
             <button class="filter-tab" data-filter="codex" onclick="setAgentFilter('codex')">Codex</button>
             <button class="filter-tab" data-filter="claude" onclick="setAgentFilter('claude')">Claude</button>
           </div>
+          <button class="action-button" id="impactToggle" onclick="toggleImpactOnly()" title="Mostrar apenas requisições com economia real ou Circuit Breaker">Só com impacto</button>
           <button class="action-button" onclick="clearFeedList()">Limpar</button>
         </div>
       </div>
@@ -1767,6 +1775,7 @@
 
     let currentAgentFilter = 'all';
     let currentProjectFilter = null;
+    let impactOnly = false;
 
     function setAgentFilter(filter) {
       currentAgentFilter = filter;
@@ -1782,6 +1791,13 @@
       } else {
         currentProjectFilter = projectName;
       }
+      applyFeedFilters();
+    }
+
+    function toggleImpactOnly() {
+      impactOnly = !impactOnly;
+      const btn = document.getElementById('impactToggle');
+      btn.classList.toggle('active', impactOnly);
       applyFeedFilters();
     }
 
@@ -1805,7 +1821,9 @@
           matchProject = itemProject.toLowerCase() === currentProjectFilter.toLowerCase();
         }
 
-        const visible = matchAgent && matchProject;
+        const matchImpact = !impactOnly || el.dataset.impact === '1';
+
+        const visible = matchAgent && matchProject && matchImpact;
         el.style.display = visible ? 'flex' : 'none';
         if (visible) visibleCount++;
       }
@@ -1843,6 +1861,7 @@
       item.dataset.client = (data.clientType || '').toLowerCase();
       item.dataset.project = (data.project || 'Geral').toLowerCase();
       item.dataset.model = (data.model || '').toLowerCase();
+      item.dataset.impact = (data.savedTokens > 0 || data.circuitBreaker || data.type === 'telemetry') ? '1' : '0';
 
       const timeStr = formatDashboardTime(data.timestamp);
 
@@ -1908,7 +1927,9 @@
       if (currentProjectFilter) {
         matchProject = item.dataset.project === currentProjectFilter.toLowerCase();
       }
-      item.style.display = (matchAgent && matchProject) ? 'flex' : 'none';
+      const matchImpact = !impactOnly || item.dataset.impact === '1';
+      item.style.display = (matchAgent && matchProject && matchImpact) ? 'flex' : 'none';
+
 
       if (prepend && feedList.firstChild) {
         feedList.insertBefore(item, feedList.firstChild);

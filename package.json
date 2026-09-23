@@ -1,6 +1,6 @@
 {
   "name": "claude-codex-guard",
-  "version": "1.4.4",
+  "version": "1.4.5",
   "description": "Provider-agnostic local proxy and command shims for Claude and Codex CLI/Desktop clients",
   "main": "src/proxy.js",
   "type": "module",
