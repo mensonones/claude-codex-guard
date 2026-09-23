@@ -1250,6 +1250,7 @@
       <details class="system-details">
         <summary>Ver configuração</summary>
         <div class="system-list">
+          <div>• <strong>Versão:</strong> <span class="status-value" id="sysVersion">v1.4.3</span></div>
           <div>• <strong>Proxy Porta:</strong> <span class="system-value" id="sysPort">48080</span></div>
           <div>• <strong>Alvo Anthropic:</strong> <span class="system-value">api.anthropic.com:443</span></div>
           <div>• <strong>Banco de Dados:</strong> <span class="system-value">~/.config/claude-codex-guard/history.db</span></div>
@@ -1648,6 +1649,9 @@
       document.getElementById('kpiLoops').textContent = all.totalLoopsBlocked || 0;
       document.getElementById('kpiTelemetry').textContent = all.totalTelemetryBlocked || 0;
       document.getElementById('sysPort').textContent = data.port || 48080;
+      if (data.version && document.getElementById('sysVersion')) {
+        document.getElementById('sysVersion').textContent = 'v' + data.version;
+      }
 
       // Update Projects
       if (Array.isArray(data.projects) && data.projects.length > 0) {

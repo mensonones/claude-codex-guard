@@ -4,7 +4,7 @@
 
 Desenvolvido em **Node.js** puro (sem dependências externas) e testado em **Ubuntu Linux** (GNOME Shell / Wayland / X11), o projeto otimiza requisições JSON de Anthropic Messages, OpenAI Chat Completions/Responses e Codex `/backend-api/`, além de bloquear telemetria localmente.
 
-Versão atual: **1.4.1**.
+Versão atual: **1.4.3**.
 
 ---
 
@@ -245,7 +245,7 @@ Os testes unitários cobrem o banco, o otimizador e a detecção de projetos. Os
 
 ## Operação local
 
-O proxy e o dashboard foram projetados para uso local. O histórico fica em `~/.config/claude-codex-guard/history.db` e não deve ser exposto publicamente sem uma camada de autenticação e controle de origem. O dashboard não usa favicon baseado em emoji e os dados dinâmicos são escapados antes de serem renderizados.
+O proxy e a dashboard foram projetados exclusivamente para uso local em `localhost` (`127.0.0.1:48080`). O histórico de métricas e economia é persistido localmente no banco SQLite em `~/.config/claude-codex-guard/history.db`.
 
 ## Licença
 

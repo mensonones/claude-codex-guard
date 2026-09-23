@@ -13,6 +13,7 @@ import { notifyCircuitBreaker } from './notifier.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const DASHBOARD_HTML_PATH = path.join(__dirname, 'dashboard.html');
+const packageJson = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../package.json'), 'utf-8'));
 
 const httpsAgent = new https.Agent({
   keepAlive: true,
@@ -320,6 +321,7 @@ export function createProxyServer(userConfig = {}) {
       res.writeHead(200, { 'content-type': 'application/json' });
       res.end(JSON.stringify({
         status: 'online',
+        version: packageJson.version,
         port: config.port,
         currentProject,
         session: optimizer.getSummary(),
